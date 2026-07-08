@@ -1,0 +1,122 @@
+"use client";
+
+import { useEffect, useState, useTransition } from "react";
+import { ChevronLeft, ChevronRight, CalendarRange } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { getMyAttendanceCalendarAction } from "@/actions/dashboard.actions";
+import type { MyCalendarDay } from "@/services/dashboardService";
+
+const STATUS_STYLE: Record<string, { cell: string; dot: string }> = {
+  PRESENT: { cell: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+  LATE: { cell: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
+  HALF_DAY: { cell: "bg-amber-50 text-amber-700", dot: "bg-amber-500" },
+  ABSENT: { cell: "bg-red-50 text-red-700", dot: "bg-red-500" },
+  ON_LEAVE: { cell: "bg-violet-50 text-violet-700", dot: "bg-violet-500" },
+  WEEKLY_OFF: { cell: "text-muted-foreground/50", dot: "bg-muted-foreground/40" },
+  HOLIDAY: { cell: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
+};
+
+const LEGEND: { key: string; label: string }[] = [
+  { key: "PRESENT", label: "Present" },
+  { key: "LATE", label: "Late" },
+  { key: "ABSENT", label: "Absent" },
+  { key: "ON_LEAVE", label: "Leave" },
+  { key: "HOLIDAY", label: "Holiday" },
+];
+
+export function AttendanceCalendar() {
+  const now = new Date();
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1); // 1-12
+  const [days, setDays] = useState<MyCalendarDay[]>([]);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    startTransition(async () => {
+      const result = await getMyAttendanceCalendarAction(year, month);
+      setDays(result);
+    });
+  }, [year, month]);
+
+  function shiftMonth(delta: number) {
+    const d = new Date(year, month - 1 + delta, 1);
+    setYear(d.getFullYear());
+    setMonth(d.getMonth() + 1);
+  }
+
+  const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const monthLabel = new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  return (
+    <Card className="rounded-2xl border-0 shadow-soft ring-1 ring-black/[0.03]">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-border/60 pb-4">
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <CalendarRange className="size-4 text-brand-blue" />
+          {monthLabel}
+        </CardTitle>
+        <div className="flex gap-1.5">
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="rounded-full border-border/70 shadow-none"
+            onClick={() => shiftMonth(-1)}
+          >
+            <ChevronLeft />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon-sm"
+            className="rounded-full border-border/70 shadow-none"
+            onClick={() => shiftMonth(1)}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <div className="mx-auto w-full max-w-[220px] sm:max-w-[250px] md:max-w-[270px] lg:max-w-[290px]">
+          <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-muted-foreground">
+            {["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <div key={i} className="py-0.5">{d}</div>
+            ))}
+            {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+              <div key={`pad-${i}`} />
+            ))}
+            {days.map((day) => {
+              const dayNum = Number(day.date.slice(-2));
+              const isToday = day.date === todayKey;
+              const style = day.status ? STATUS_STYLE[day.status] : undefined;
+              return (
+                <div
+                  key={day.date}
+                  className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs transition-colors ${
+                    isToday
+                      ? "bg-gradient-to-br from-brand-orange to-brand-orange-light font-bold text-white shadow-soft"
+                      : `${style?.cell ?? "text-foreground hover:bg-muted"} font-medium`
+                  }`}
+                >
+                  <span>{dayNum}</span>
+                  {day.status && !isToday && <span className={`size-1 rounded-full ${style?.dot}`} />}
+                </div>
+              );
+            })}
+          </div>
+          {isPending && <p className="mt-2 text-center text-xs text-muted-foreground">Loading…</p>}
+          <div className="mt-4 flex flex-wrap gap-1.5 border-t border-border/60 pt-3">
+            {LEGEND.map((l) => (
+              <span
+                key={l.key}
+                className="flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+              >
+                <span className={`size-1.5 rounded-full ${STATUS_STYLE[l.key]?.dot}`} />
+                {l.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

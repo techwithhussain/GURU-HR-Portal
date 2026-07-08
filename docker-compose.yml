@@ -1,0 +1,27 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gda_ems
+      POSTGRES_PASSWORD: gda_ems_dev
+      POSTGRES_DB: gda_ems
+    ports:
+      - "5432:5432"
+    volumes:
+      - gda_ems_postgres_data:/var/lib/postgresql/data
+
+  postgres_test:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gda_ems
+      POSTGRES_PASSWORD: gda_ems_test
+      POSTGRES_DB: gda_ems_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+
+volumes:
+  gda_ems_postgres_data:

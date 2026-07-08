@@ -1,0 +1,278 @@
+import "server-only";
+import { createHash, randomBytes } from "crypto";
+import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
+import { hashPassword, validatePasswordPolicy, verifyPassword } from "@/lib/password";
+import {
+  createSession,
+  getSessionContext,
+  revokeAllSessionsForUser,
+  revokeCurrentSession,
+  revokeOtherSessionsForUser,
+} from "@/services/sessionService";
+import { recordAudit } from "@/services/auditService";
+import { sendMail } from "@/lib/mailer";
+import { notifyUser, notifyUsers } from "@/services/notificationService";
+
+export interface LoginInput {
+  employeeCode: string;
+  password: string;
+  ip: string | null;
+  userAgent: string | null;
+}
+
+export type LoginResult =
+  | { ok: true }
+  | { ok: false; error: "INVALID_CREDENTIALS" }
+  | { ok: false; error: "ACCOUNT_LOCKED"; retryAfterMinutes: number };
+
+const INVALID_CREDENTIALS: LoginResult = { ok: false, error: "INVALID_CREDENTIALS" };
+
+export async function login(input: LoginInput): Promise<LoginResult> {
+  const user = await prisma.user.findUnique({
+    where: { employeeCode: input.employeeCode },
+    select: {
+      id: true,
+      passwordHash: true,
+      status: true,
+      failedLoginAttempts: true,
+      lastFailedLoginAt: true,
+      lockedUntil: true,
+    },
+  });
+
+  if (!user || user.status !== "ACTIVE") {
+    await recordAudit({
+      action: "auth.login.failed",
+      targetEntity: "user",
+      targetId: user?.id ?? null,
+      ip: input.ip,
+      userAgent: input.userAgent,
+      metadata: { employeeCode: input.employeeCode, reason: "not_found_or_inactive" },
+    });
+    return INVALID_CREDENTIALS;
+  }
+
+  const now = new Date();
+  if (user.lockedUntil && user.lockedUntil > now) {
+    const retryAfterMinutes = Math.ceil((user.lockedUntil.getTime() - now.getTime()) / 60000);
+    await recordAudit({
+      actorUserId: user.id,
+      action: "auth.login.blocked_locked",
+      targetEntity: "user",
+      targetId: user.id,
+      ip: input.ip,
+      userAgent: input.userAgent,
+    });
+    return { ok: false, error: "ACCOUNT_LOCKED", retryAfterMinutes };
+  }
+
+  const passwordOk = await verifyPassword(input.password, user.passwordHash);
+  if (!passwordOk) {
+    await recordFailedAttempt(user, input, now);
+    return INVALID_CREDENTIALS;
+  }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { failedLoginAttempts: 0, lastFailedLoginAt: null, lockedUntil: null, lastLoginAt: now },
+  });
+
+  await createSession({ userId: user.id, ip: input.ip, userAgent: input.userAgent });
+  await recordAudit({
+    actorUserId: user.id,
+    action: "auth.login.success",
+    targetEntity: "user",
+    targetId: user.id,
+    ip: input.ip,
+    userAgent: input.userAgent,
+  });
+
+  return { ok: true };
+}
+
+async function recordFailedAttempt(
+  user: { id: string; failedLoginAttempts: number; lastFailedLoginAt: Date | null },
+  input: LoginInput,
+  now: Date,
+): Promise<void> {
+  const windowMs = env.ACCOUNT_LOCKOUT_WINDOW_MINUTES * 60_000;
+  const withinWindow = user.lastFailedLoginAt
+    ? now.getTime() - user.lastFailedLoginAt.getTime() <= windowMs
+    : false;
+  const nextAttempts = withinWindow ? user.failedLoginAttempts + 1 : 1;
+
+  const willLock = nextAttempts >= env.ACCOUNT_LOCKOUT_MAX_ATTEMPTS;
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      failedLoginAttempts: nextAttempts,
+      lastFailedLoginAt: now,
+      lockedUntil: willLock
+        ? new Date(now.getTime() + env.ACCOUNT_LOCKOUT_DURATION_MINUTES * 60_000)
+        : undefined,
+    },
+  });
+
+  await recordAudit({
+    actorUserId: user.id,
+    action: willLock ? "auth.login.lockout_triggered" : "auth.login.failed",
+    targetEntity: "user",
+    targetId: user.id,
+    ip: input.ip,
+    userAgent: input.userAgent,
+    metadata: { attempts: nextAttempts },
+  });
+
+  if (willLock) {
+    const admins = await prisma.user.findMany({
+      where: { role: { name: "ADMIN" }, status: "ACTIVE" },
+      select: { id: true },
+    });
+    const payload = { lockedUserId: user.id, attempts: nextAttempts };
+    await notifyUser(user.id, "ACCOUNT_LOCKED", payload, {
+      subject: "Your GDA EMS account has been locked",
+      text: `Your account was locked after ${nextAttempts} failed login attempts. It will unlock automatically after ${env.ACCOUNT_LOCKOUT_DURATION_MINUTES} minutes.`,
+    });
+    await notifyUsers(
+      admins.map((a) => a.id),
+      "ACCOUNT_LOCKED",
+      payload,
+    );
+  }
+}
+
+export async function logout(): Promise<void> {
+  const session = await getSessionContext();
+  await revokeCurrentSession();
+  if (session) {
+    await recordAudit({
+      actorUserId: session.userId,
+      action: "auth.logout",
+      targetEntity: "user",
+      targetId: session.userId,
+    });
+  }
+}
+
+export interface ChangePasswordInput {
+  userId: string;
+  currentSessionId: string;
+  currentPassword: string;
+  newPassword: string;
+}
+
+export async function changePassword(
+  input: ChangePasswordInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { id: input.userId },
+    select: { passwordHash: true },
+  });
+
+  const currentValid = await verifyPassword(input.currentPassword, user.passwordHash);
+  if (!currentValid) return { ok: false, error: "CURRENT_PASSWORD_INVALID" };
+
+  const policy = validatePasswordPolicy(input.newPassword);
+  if (!policy.valid) return { ok: false, error: policy.reason! };
+
+  const passwordHash = await hashPassword(input.newPassword);
+  await prisma.user.update({
+    where: { id: input.userId },
+    data: { passwordHash, mustChangePassword: false },
+  });
+
+  await revokeOtherSessionsForUser(input.userId, input.currentSessionId);
+  await recordAudit({
+    actorUserId: input.userId,
+    action: "auth.password.changed",
+    targetEntity: "user",
+    targetId: input.userId,
+  });
+
+  return { ok: true };
+}
+
+const RESET_TOKEN_TTL_MS = 30 * 60_000;
+
+export async function requestPasswordReset(
+  employeeCodeOrEmail: string,
+): Promise<{ resetLink?: string }> {
+  const user = await prisma.user.findFirst({
+    where: { OR: [{ employeeCode: employeeCodeOrEmail }, { email: employeeCodeOrEmail }] },
+    select: { id: true, email: true },
+  });
+
+  // Do not reveal whether the account exists.
+  if (!user) return {};
+
+  const rawToken = randomBytes(32).toString("hex");
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordResetTokenHash: tokenHash,
+      passwordResetExpiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+    },
+  });
+
+  await recordAudit({
+    actorUserId: user.id,
+    action: "auth.password_reset.requested",
+    targetEntity: "user",
+    targetId: user.id,
+  });
+
+  const resetLink = `${env.APP_URL}/reset-password/${rawToken}`;
+  await sendMail({
+    to: user.email,
+    subject: "Reset your GDA EMS password",
+    text: `Use this link to reset your password (valid for 30 minutes):\n\n${resetLink}`,
+  });
+
+  return { resetLink };
+}
+
+export async function resetPassword(
+  rawToken: string,
+  newPassword: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const tokenHash = createHash("sha256").update(rawToken).digest("hex");
+  const user = await prisma.user.findFirst({
+    where: { passwordResetTokenHash: tokenHash },
+    select: { id: true, passwordResetExpiresAt: true },
+  });
+
+  if (!user || !user.passwordResetExpiresAt || user.passwordResetExpiresAt < new Date()) {
+    return { ok: false, error: "INVALID_OR_EXPIRED_TOKEN" };
+  }
+
+  const policy = validatePasswordPolicy(newPassword);
+  if (!policy.valid) return { ok: false, error: policy.reason! };
+
+  const passwordHash = await hashPassword(newPassword);
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      passwordHash,
+      passwordResetTokenHash: null,
+      passwordResetExpiresAt: null,
+      mustChangePassword: false,
+      failedLoginAttempts: 0,
+      lastFailedLoginAt: null,
+      lockedUntil: null,
+    },
+  });
+
+  await revokeAllSessionsForUser(user.id);
+  await recordAudit({
+    actorUserId: user.id,
+    action: "auth.password_reset.completed",
+    targetEntity: "user",
+    targetId: user.id,
+  });
+
+  return { ok: true };
+}
