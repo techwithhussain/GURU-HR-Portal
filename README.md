@@ -1,18 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+GDA EMS — HR portal for Guru Digital Advertising, built with Next.js, Prisma, and Postgres.
 
-## Getting Started
+## Getting Started (new machine)
 
-First, run the development server:
-
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Copy the env template and fill in real values (DB credentials, `JWT_SECRET`, `CRON_SECRET`, etc.):
+   ```bash
+   cp .env.example .env
+   ```
+3. Start Postgres via Docker:
+   ```bash
+   docker compose up -d postgres
+   ```
+4. Run migrations and seed the database:
+   ```bash
+   npm run db:migrate
+   npm run db:seed
+   ```
+5. Start the dev server:
+   ```bash
+   npm run dev
+   ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
