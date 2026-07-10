@@ -77,6 +77,19 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
   // would spuriously read 0 worked minutes as HALF_DAY) isn't used here.
   const lateMinutes = computeLateMinutes(now, attendanceDate, shiftTiming, timezone);
 
+  // An approved leave already owns this calendar day (it pre-creates an
+  // ON_LEAVE placeholder row) — block here with a clear message instead of
+  // silently falling through to the P2002 branch below, which would return
+  // that placeholder as-is (checkInAt never set, status stuck on ON_LEAVE).
+  const approvedLeaveToday = await prisma.leave.findFirst({
+    where: { employeeId, status: "APPROVED", startDate: { lte: attendanceDate }, endDate: { gte: attendanceDate } },
+  });
+  if (approvedLeaveToday) {
+    throw new ConflictError(
+      "You have an approved leave for today. Ask Admin to cancel it first if you need to check in.",
+    );
+  }
+
   try {
     const attendance = await prisma.attendance.create({
       data: {
