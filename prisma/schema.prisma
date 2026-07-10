@@ -81,7 +81,9 @@ model User {
   auditLogs      AuditLog[]      @relation("AuditActor")
   correctedRows  Attendance[]    @relation("AttendanceCorrectedBy")
   notifications  Notification[]
-  approvedLeaves Leave[]         @relation("LeaveApprover")
+  approvedLeaves  Leave[]        @relation("LeaveApprover")
+  cancelledLeaves Leave[]        @relation("LeaveCancelledBy")
+  uploadedDocuments EmployeeDocument[]
 
   @@map("users")
 }
@@ -137,6 +139,7 @@ model Designation {
 enum EmployeeStatus {
   ACTIVE
   INACTIVE
+  RESIGNED
 }
 
 model Employee {
@@ -144,16 +147,21 @@ model Employee {
   userId           String         @unique
   fullName         String
   phone            String?
+  address          String?
   departmentId     String?
   designationId    String?
   shiftId          String?
   managerId        String?
   joiningDate      DateTime       @db.Date
   salary           Decimal?       @db.Decimal(12, 2)
+  salaryType       String?
+  allowances       Decimal?       @db.Decimal(12, 2)
+  deductions       Decimal?       @db.Decimal(12, 2)
   emergencyContact String?
   documents        Json?
   status           EmployeeStatus @default(ACTIVE)
   profileImageUrl  String?
+  resignedAt       DateTime?
   deletedAt        DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
@@ -168,10 +176,36 @@ model Employee {
   attendance     Attendance[]
   leaves         Leave[]
   leaveBalances  LeaveBalance[]
+  documentFiles  EmployeeDocument[]
 
   @@index([departmentId])
   @@index([status])
   @@map("employees")
+}
+
+enum EmployeeDocumentType {
+  AADHAAR
+  PAN
+  RESUME
+  OFFER_LETTER
+  EXPERIENCE_LETTER
+  OTHER
+}
+
+model EmployeeDocument {
+  id               String               @id @default(cuid())
+  employeeId       String
+  type             EmployeeDocumentType
+  fileName         String
+  storagePath      String
+  uploadedByUserId String?
+  createdAt        DateTime             @default(now())
+
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  uploadedBy User?    @relation(fields: [uploadedByUserId], references: [id])
+
+  @@index([employeeId])
+  @@map("employee_documents")
 }
 
 // ---------------------------------------------------------------------------
@@ -230,6 +264,7 @@ model Attendance {
   correctedByUserId    String?
   correctionReason     String?
   correctionBeforeJson Json?
+  adminNotes           String?          @db.Text
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
@@ -270,49 +305,79 @@ model Break {
 }
 
 // ---------------------------------------------------------------------------
-// Leave (schema-only stub this slice — no services/actions/UI yet)
+// Leave
 // ---------------------------------------------------------------------------
+
+model LeaveType {
+  id                    String   @id @default(cuid())
+  code                  String   @unique
+  name                  String
+  defaultAllocationDays Decimal? @db.Decimal(5, 1)
+  requiresAttachment    Boolean  @default(false)
+  color                 String   @default("#f97316")
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  leaves   Leave[]
+  balances LeaveBalance[]
+
+  @@map("leave_types")
+}
 
 enum LeaveStatus {
   APPLIED
   APPROVED
   REJECTED
+  CANCELLED
 }
 
 model Leave {
-  id             String      @id @default(cuid())
-  employeeId     String
-  type           String
-  startDate      DateTime    @db.Date
-  endDate        DateTime    @db.Date
-  days           Decimal     @db.Decimal(4, 1)
-  reason         String?
-  status         LeaveStatus @default(APPLIED)
-  approverId     String?
-  decisionReason String?
-  decidedAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  id                 String      @id @default(cuid())
+  employeeId         String
+  typeId             String
+  startDate          DateTime    @db.Date
+  endDate            DateTime    @db.Date
+  days               Decimal     @db.Decimal(4, 1)
+  isHalfDay          Boolean     @default(false)
+  reason             String?
+  attachmentPath     String?
+  attachmentFileName String?
+  status             LeaveStatus @default(APPLIED)
+  approverId         String?
+  decisionReason     String?
+  decidedAt          DateTime?
+  cancelledByUserId  String?
+  cancelledAt        DateTime?
+  cancellationReason String?
+  createdAt          DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id])
-  approver User?    @relation("LeaveApprover", fields: [approverId], references: [id])
+  employee    Employee  @relation(fields: [employeeId], references: [id])
+  type        LeaveType @relation(fields: [typeId], references: [id])
+  approver    User?     @relation("LeaveApprover", fields: [approverId], references: [id])
+  cancelledBy User?     @relation("LeaveCancelledBy", fields: [cancelledByUserId], references: [id])
 
+  @@index([employeeId, status])
+  @@index([status])
+  @@index([typeId])
   @@map("leaves")
 }
 
 model LeaveBalance {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   employeeId String
-  type       String
-  allocated  Decimal  @db.Decimal(5, 1)
-  used       Decimal  @db.Decimal(5, 1) @default(0)
+  typeId     String
+  allocated  Decimal   @db.Decimal(5, 1)
+  used       Decimal   @db.Decimal(5, 1) @default(0)
   year       Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id])
+  employee Employee  @relation(fields: [employeeId], references: [id])
+  type     LeaveType @relation(fields: [typeId], references: [id])
 
-  @@unique([employeeId, type, year])
+  @@unique([employeeId, typeId, year])
   @@map("leave_balances")
 }
 

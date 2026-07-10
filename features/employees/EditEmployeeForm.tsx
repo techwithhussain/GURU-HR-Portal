@@ -6,6 +6,7 @@ import { updateEmployeeAction, type UpdateEmployeeFormState } from "@/actions/em
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhotoUpload } from "@/features/employees/PhotoUpload";
 
 interface Option {
   id: string;
@@ -21,25 +22,40 @@ const initialState: UpdateEmployeeFormState = {};
 const selectClass =
   "h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
+const SALARY_TYPES = ["MONTHLY", "HOURLY", "ANNUAL"] as const;
+
+function toDateInputValue(date: Date | string): string {
+  return new Date(date).toISOString().slice(0, 10);
+}
+
 export function EditEmployeeForm({
   employee,
   departments,
   designations,
   shifts,
+  roles,
 }: {
   employee: {
     id: string;
     fullName: string;
     phone: string | null;
+    address: string | null;
     departmentId: string | null;
     designationId: string | null;
     shiftId: string | null;
+    joiningDate: Date | string;
     salary?: unknown;
+    salaryType: string | null;
+    allowances?: unknown;
+    deductions?: unknown;
     emergencyContact: string | null;
+    profileImageUrl: string | null;
+    user: { roleId: string };
   };
   departments: Option[];
   designations: DesignationOption[];
   shifts: Option[];
+  roles: Option[];
 }) {
   const updateWithId = updateEmployeeAction.bind(null, employee.id);
   const [state, formAction, pending] = useActionState(updateWithId, initialState);
@@ -58,6 +74,8 @@ export function EditEmployeeForm({
 
   return (
     <form action={formAction} className="grid max-w-xl gap-4">
+      <PhotoUpload initialPhotoPath={employee.profileImageUrl} />
+
       <div className="space-y-2">
         <Label htmlFor="fullName">Full name</Label>
         <Input id="fullName" name="fullName" defaultValue={employee.fullName} required />
@@ -69,16 +87,14 @@ export function EditEmployeeForm({
           <Input id="phone" name="phone" defaultValue={employee.phone ?? ""} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="salary">Salary</Label>
-          <Input
-            id="salary"
-            name="salary"
-            type="number"
-            min="0"
-            step="0.01"
-            defaultValue={employee.salary != null ? String(employee.salary) : ""}
-          />
+          <Label htmlFor="joiningDate">Joining Date</Label>
+          <Input id="joiningDate" name="joiningDate" type="date" defaultValue={toDateInputValue(employee.joiningDate)} />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="address">Address</Label>
+        <Input id="address" name="address" defaultValue={employee.address ?? ""} />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -119,13 +135,73 @@ export function EditEmployeeForm({
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="shiftId">Shift</Label>
+          <select id="shiftId" name="shiftId" defaultValue={employee.shiftId ?? ""} className={selectClass}>
+            <option value="">None</option>
+            {shifts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="roleId">Role</Label>
+          <select id="roleId" name="roleId" defaultValue={employee.user.roleId} className={selectClass}>
+            {roles.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="salary">Monthly Salary</Label>
+          <Input
+            id="salary"
+            name="salary"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={employee.salary != null ? String(employee.salary) : ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="allowances">Allowances</Label>
+          <Input
+            id="allowances"
+            name="allowances"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={employee.allowances != null ? String(employee.allowances) : ""}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="deductions">Deductions</Label>
+          <Input
+            id="deductions"
+            name="deductions"
+            type="number"
+            min="0"
+            step="0.01"
+            defaultValue={employee.deductions != null ? String(employee.deductions) : ""}
+          />
+        </div>
+      </div>
+
       <div className="space-y-2">
-        <Label htmlFor="shiftId">Shift</Label>
-        <select id="shiftId" name="shiftId" defaultValue={employee.shiftId ?? ""} className={selectClass}>
+        <Label htmlFor="salaryType">Salary Type</Label>
+        <select id="salaryType" name="salaryType" defaultValue={employee.salaryType ?? ""} className={selectClass}>
           <option value="">None</option>
-          {shifts.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
+          {SALARY_TYPES.map((t) => (
+            <option key={t} value={t}>
+              {t.charAt(0) + t.slice(1).toLowerCase()}
             </option>
           ))}
         </select>
@@ -133,11 +209,7 @@ export function EditEmployeeForm({
 
       <div className="space-y-2">
         <Label htmlFor="emergencyContact">Emergency contact</Label>
-        <Input
-          id="emergencyContact"
-          name="emergencyContact"
-          defaultValue={employee.emergencyContact ?? ""}
-        />
+        <Input id="emergencyContact" name="emergencyContact" defaultValue={employee.emergencyContact ?? ""} />
       </div>
 
       {state.error && (

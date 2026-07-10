@@ -75,18 +75,18 @@ export function HeroBanner({
         </div>
 
         <div className="mx-auto hidden shrink-0 items-center gap-3 sm:flex lg:mx-0">
-          <div className="hidden items-center gap-2 md:flex">
+          <div className="hidden items-center gap-2.5 md:flex">
             <Image
               src="/logo.png"
               alt=""
-              width={32}
-              height={32}
+              width={64}
+              height={64}
               unoptimized
-              className="size-7 shrink-0 object-contain drop-shadow-md lg:size-8"
+              className="size-11 shrink-0 object-contain drop-shadow-md lg:size-12"
             />
             <div className="leading-tight">
-              <p className="text-sm font-extrabold tracking-wide text-white lg:text-base">GURU</p>
-              <p className="text-[9px] tracking-widest text-white/70">DIGITAL ADVERTISING</p>
+              <p className="text-lg font-extrabold tracking-wide text-white lg:text-xl">GURU</p>
+              <p className="text-[11px] tracking-widest text-white/70">DIGITAL ADVERTISING</p>
             </div>
           </div>
 
@@ -98,7 +98,7 @@ export function HeroBanner({
               width={738}
               height={1600}
               unoptimized
-              className="relative h-28 w-auto object-contain object-bottom drop-shadow-2xl sm:h-32 lg:h-36"
+              className="relative h-36 w-auto object-contain object-bottom drop-shadow-2xl sm:h-40 lg:h-48"
             />
           </div>
         </div>

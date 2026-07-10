@@ -2,11 +2,14 @@ import Link from "next/link";
 import { getSessionContext } from "@/services/sessionService";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { getAttendanceReport, getLeaveReport } from "@/services/reportsService";
-import { listDepartments, listEmployees } from "@/services/orgService";
+import { listDepartments, listDesignations, listEmployees } from "@/services/orgService";
+import { listShifts } from "@/services/shiftService";
+import { listLeaveTypesAction } from "@/actions/leaveType.actions";
 import { reportFiltersSchema } from "@/lib/validation/report";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -19,6 +22,26 @@ import {
 const selectClass =
   "h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
+const STATUS_OPTIONS = ["PRESENT", "LATE", "HALF_DAY", "ABSENT", "ON_LEAVE", "HOLIDAY", "WEEKLY_OFF"] as const;
+const LEAVE_STATUS_OPTIONS = ["APPLIED", "APPROVED", "REJECTED", "CANCELLED"] as const;
+
+const STATUS_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  PRESENT: "default",
+  LATE: "outline",
+  HALF_DAY: "secondary",
+  ABSENT: "destructive",
+  ON_LEAVE: "secondary",
+  HOLIDAY: "secondary",
+  WEEKLY_OFF: "secondary",
+};
+
+const LEAVE_STATUS_CLASS: Record<string, string> = {
+  APPLIED: "bg-amber-100 text-amber-700 border-amber-200",
+  APPROVED: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  REJECTED: "bg-red-100 text-red-700 border-red-200",
+  CANCELLED: "bg-blue-100 text-blue-700 border-blue-200",
+};
+
 function firstDayOfMonth(): string {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
@@ -29,23 +52,36 @@ function lastDayOfMonth(): string {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 }
 
-const ATTENDANCE_COLUMNS = [
-  { key: "employeeName", label: "Employee" },
-  { key: "department", label: "Department" },
-  { key: "date", label: "Date" },
-  { key: "status", label: "Status" },
-  { key: "workingMinutes", label: "Working (min)" },
-  { key: "lateMinutes", label: "Late (min)" },
-  { key: "overtimeMinutes", label: "OT (min)" },
-] as const;
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return parts
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function formatMinutes(min: number | null): string {
+  if (min == null) return "—";
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
+function formatClock(iso: string): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
 
 const LEAVE_COLUMNS = [
+  { key: "employeeCode", label: "Employee ID" },
   { key: "employeeName", label: "Employee" },
   { key: "department", label: "Department" },
+  { key: "designation", label: "Designation" },
   { key: "type", label: "Type" },
   { key: "startDate", label: "Start" },
   { key: "endDate", label: "End" },
   { key: "days", label: "Days" },
+  { key: "reason", label: "Reason" },
   { key: "status", label: "Status" },
 ] as const;
 
@@ -62,12 +98,14 @@ export default async function ReportsPage({
   const startDate = params.startDate || firstDayOfMonth();
   const endDate = params.endDate || lastDayOfMonth();
 
-  const canFilterByEmployee = hasPermission(session, "reports.view.all");
-  const canFilterByDepartment = hasPermission(session, "reports.view.all");
+  const canFilterAll = hasPermission(session, "reports.view.all");
 
-  const [employees, departments] = await Promise.all([
-    canFilterByEmployee ? listEmployees() : Promise.resolve([]),
-    canFilterByDepartment ? listDepartments() : Promise.resolve([]),
+  const [employees, departments, designations, shifts, leaveTypes] = await Promise.all([
+    canFilterAll ? listEmployees() : Promise.resolve([]),
+    canFilterAll ? listDepartments() : Promise.resolve([]),
+    canFilterAll ? listDesignations() : Promise.resolve([]),
+    canFilterAll ? listShifts() : Promise.resolve([]),
+    listLeaveTypesAction(),
   ]);
 
   const parsedFilters = reportFiltersSchema.safeParse({
@@ -75,22 +113,27 @@ export default async function ReportsPage({
     endDate,
     employeeId: params.employeeId || undefined,
     departmentId: params.departmentId || undefined,
+    designationId: params.designationId || undefined,
+    shiftId: params.shiftId || undefined,
+    leaveTypeId: params.leaveTypeId || undefined,
+    status: params.status || undefined,
   });
 
-  const rows = parsedFilters.success
-    ? type === "leave"
-      ? await getLeaveReport(parsedFilters.data, session)
-      : await getAttendanceReport(parsedFilters.data, session)
-    : [];
+  const attendanceRows =
+    parsedFilters.success && type === "attendance" ? await getAttendanceReport(parsedFilters.data, session) : [];
+  const leaveRows =
+    parsedFilters.success && type === "leave" ? await getLeaveReport(parsedFilters.data, session) : [];
 
   const exportQuery = new URLSearchParams({
     startDate,
     endDate,
     ...(params.employeeId ? { employeeId: params.employeeId } : {}),
     ...(params.departmentId ? { departmentId: params.departmentId } : {}),
+    ...(params.designationId ? { designationId: params.designationId } : {}),
+    ...(params.shiftId ? { shiftId: params.shiftId } : {}),
+    ...(params.leaveTypeId ? { leaveTypeId: params.leaveTypeId } : {}),
+    ...(params.status ? { status: params.status } : {}),
   });
-
-  const columns = type === "leave" ? LEAVE_COLUMNS : ATTENDANCE_COLUMNS;
 
   return (
     <div className="space-y-6">
@@ -121,15 +164,10 @@ export default async function ReportsPage({
           <Label htmlFor="endDate">End date</Label>
           <Input id="endDate" name="endDate" type="date" defaultValue={endDate} />
         </div>
-        {canFilterByEmployee && (
+        {canFilterAll && (
           <div className="space-y-2">
             <Label htmlFor="employeeId">Employee</Label>
-            <select
-              id="employeeId"
-              name="employeeId"
-              className={selectClass}
-              defaultValue={params.employeeId ?? ""}
-            >
+            <select id="employeeId" name="employeeId" className={selectClass} defaultValue={params.employeeId ?? ""}>
               <option value="">All</option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>
@@ -139,7 +177,7 @@ export default async function ReportsPage({
             </select>
           </div>
         )}
-        {canFilterByDepartment && (
+        {canFilterAll && (
           <div className="space-y-2">
             <Label htmlFor="departmentId">Department</Label>
             <select
@@ -157,6 +195,61 @@ export default async function ReportsPage({
             </select>
           </div>
         )}
+        {canFilterAll && (
+          <div className="space-y-2">
+            <Label htmlFor="designationId">Designation</Label>
+            <select
+              id="designationId"
+              name="designationId"
+              className={selectClass}
+              defaultValue={params.designationId ?? ""}
+            >
+              <option value="">All</option>
+              {designations.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {canFilterAll && type === "attendance" && (
+          <div className="space-y-2">
+            <Label htmlFor="shiftId">Shift</Label>
+            <select id="shiftId" name="shiftId" className={selectClass} defaultValue={params.shiftId ?? ""}>
+              <option value="">All</option>
+              {shifts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        {type === "leave" && (
+          <div className="space-y-2">
+            <Label htmlFor="leaveTypeId">Leave Type</Label>
+            <select id="leaveTypeId" name="leaveTypeId" className={selectClass} defaultValue={params.leaveTypeId ?? ""}>
+              <option value="">All</option>
+              {leaveTypes.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="space-y-2">
+          <Label htmlFor="status">Status</Label>
+          <select id="status" name="status" className={selectClass} defaultValue={params.status ?? ""}>
+            <option value="">All</option>
+            {(type === "attendance" ? STATUS_OPTIONS : LEAVE_STATUS_OPTIONS).map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
         <Button type="submit" variant="outline">
           Filter
         </Button>
@@ -175,35 +268,110 @@ export default async function ReportsPage({
         <Button asChild variant="outline" size="sm">
           <a href={`/api/reports/${type}?${exportQuery.toString()}&format=xlsx`}>Export Excel</a>
         </Button>
+        <Button asChild variant="outline" size="sm">
+          <a href={`/api/reports/${type}?${exportQuery.toString()}&format=pdf`}>Export PDF</a>
+        </Button>
       </div>
 
-      <Table>
-        <TableHeader>
-          <TableRow>
-            {columns.map((col) => (
-              <TableHead key={col.key}>{col.label}</TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, i) => (
-            <TableRow key={i}>
-              {columns.map((col) => (
-                <TableCell key={col.key}>
-                  {String((row as unknown as Record<string, unknown>)[col.key] ?? "—")}
+      {type === "attendance" ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Employee</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead>Designation</TableHead>
+              <TableHead>Shift</TableHead>
+              <TableHead>Date</TableHead>
+              <TableHead>Check In</TableHead>
+              <TableHead>Check Out</TableHead>
+              <TableHead>Working</TableHead>
+              <TableHead>Break</TableHead>
+              <TableHead>Late</TableHead>
+              <TableHead>OT</TableHead>
+              <TableHead>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {attendanceRows.map((row) => (
+              <TableRow key={row.attendanceId}>
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-orange to-brand-orange-light text-[10px] font-semibold text-white">
+                      {initials(row.employeeName)}
+                    </div>
+                    <div className="flex flex-col leading-tight">
+                      {canFilterAll ? (
+                        <Link href={`/reports/attendance/${row.attendanceId}`} className="font-medium hover:underline">
+                          {row.employeeName}
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{row.employeeName}</span>
+                      )}
+                      <span className="text-xs text-muted-foreground">{row.employeeCode}</span>
+                    </div>
+                  </div>
                 </TableCell>
+                <TableCell>{row.department}</TableCell>
+                <TableCell>{row.designation}</TableCell>
+                <TableCell>{row.shiftName}</TableCell>
+                <TableCell>{row.date}</TableCell>
+                <TableCell>{formatClock(row.checkInAt)}</TableCell>
+                <TableCell>{formatClock(row.checkOutAt)}</TableCell>
+                <TableCell>{formatMinutes(row.workingMinutes)}</TableCell>
+                <TableCell>{formatMinutes(row.breakMinutes)}</TableCell>
+                <TableCell>{row.lateMinutes > 0 ? `${row.lateMinutes}m` : "—"}</TableCell>
+                <TableCell>{row.overtimeMinutes > 0 ? `${row.overtimeMinutes}m` : "—"}</TableCell>
+                <TableCell>
+                  <Badge variant={STATUS_BADGE_VARIANT[row.status] ?? "outline"}>{row.status}</Badge>
+                </TableCell>
+              </TableRow>
+            ))}
+            {attendanceRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={12} className="text-center text-muted-foreground">
+                  No records for this range.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              {LEAVE_COLUMNS.map((col) => (
+                <TableHead key={col.key}>{col.label}</TableHead>
               ))}
             </TableRow>
-          ))}
-          {rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={columns.length} className="text-center text-muted-foreground">
-                No records for this range.
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {leaveRows.map((row, i) => (
+              <TableRow key={i}>
+                {LEAVE_COLUMNS.map((col) =>
+                  col.key === "status" ? (
+                    <TableCell key={col.key}>
+                      <Badge variant="outline" className={LEAVE_STATUS_CLASS[row.status]}>
+                        {row.status}
+                      </Badge>
+                    </TableCell>
+                  ) : (
+                    <TableCell key={col.key}>
+                      {String((row as unknown as Record<string, unknown>)[col.key] ?? "—")}
+                    </TableCell>
+                  ),
+                )}
+              </TableRow>
+            ))}
+            {leaveRows.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={LEAVE_COLUMNS.length} className="text-center text-muted-foreground">
+                  No records for this range.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
 }

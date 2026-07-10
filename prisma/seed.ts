@@ -38,6 +38,34 @@ const ORG_STRUCTURE: Record<string, string[]> = {
   General: ["Intern"],
 };
 
+// Default leave type catalog — Admin can add/edit/deactivate/delete more later
+// via the Leave Types admin UI. `defaultAllocationDays: undefined` = unlimited.
+const DEFAULT_LEAVE_TYPES = [
+  { code: "CL", name: "Casual Leave", defaultAllocationDays: 12, requiresAttachment: false, color: "#f97316" },
+  { code: "SL", name: "Sick Leave", defaultAllocationDays: 10, requiresAttachment: true, color: "#ef4444" },
+  { code: "EL", name: "Earned Leave", defaultAllocationDays: 15, requiresAttachment: false, color: "#22c55e" },
+  { code: "HALF_DAY", name: "Half Day Leave", defaultAllocationDays: 12, requiresAttachment: false, color: "#a855f7" },
+  { code: "WFH", name: "Work From Home", defaultAllocationDays: 24, requiresAttachment: false, color: "#3b82f6" },
+  { code: "EMERGENCY", name: "Emergency Leave", defaultAllocationDays: 5, requiresAttachment: false, color: "#eab308" },
+  { code: "LWP", name: "Unpaid Leave", defaultAllocationDays: undefined, requiresAttachment: false, color: "#6b7280" },
+];
+
+async function seedLeaveTypes() {
+  for (const t of DEFAULT_LEAVE_TYPES) {
+    await prisma.leaveType.upsert({
+      where: { code: t.code },
+      update: {},
+      create: {
+        code: t.code,
+        name: t.name,
+        defaultAllocationDays: t.defaultAllocationDays,
+        requiresAttachment: t.requiresAttachment,
+        color: t.color,
+      },
+    });
+  }
+}
+
 async function seedPermissions() {
   for (const key of PERMISSION_KEYS) {
     await prisma.permission.upsert({
@@ -182,6 +210,7 @@ async function main() {
   await seedPermissions();
   const roleIds = await seedRoles();
   await seedCompanySettings();
+  await seedLeaveTypes();
   const { managementDept, operationsManagerDesignationId, defaultShift } = await seedOrgStructure();
   await seedAdmin(roleIds, defaultShift.id, managementDept.id, operationsManagerDesignationId);
 }

@@ -7,12 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setLeaveBalanceAction } from "@/actions/leave.actions";
-import { LEAVE_TYPES } from "@/lib/validation/leave";
 
 const selectClass =
   "h-9 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
-export function SetLeaveBalanceForm({ employees }: { employees: { id: string; fullName: string }[] }) {
+export function SetLeaveBalanceForm({
+  employees,
+  leaveTypes,
+}: {
+  employees: { id: string; fullName: string }[];
+  leaveTypes: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +25,7 @@ export function SetLeaveBalanceForm({ employees }: { employees: { id: string; fu
   function handleSubmit(formData: FormData) {
     const payload = {
       employeeId: String(formData.get("employeeId")),
-      type: String(formData.get("type")),
+      typeId: String(formData.get("typeId")),
       year: String(formData.get("year")),
       allocated: String(formData.get("allocated")),
     };
@@ -54,14 +59,14 @@ export function SetLeaveBalanceForm({ employees }: { employees: { id: string; fu
         </select>
       </div>
       <div className="space-y-2">
-        <Label htmlFor="type">Type</Label>
-        <select id="type" name="type" required className={selectClass} defaultValue="">
+        <Label htmlFor="typeId">Type</Label>
+        <select id="typeId" name="typeId" required className={selectClass} defaultValue="">
           <option value="" disabled>
             Select
           </option>
-          {LEAVE_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type.charAt(0) + type.slice(1).toLowerCase()}
+          {leaveTypes.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
             </option>
           ))}
         </select>

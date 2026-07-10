@@ -6,6 +6,7 @@ import * as attendanceService from "@/services/attendanceService";
 import { requireSession } from "@/services/sessionService";
 import { getClientIp } from "@/lib/network/getClientIp";
 import { correctAttendanceSchema, startBreakSchema } from "@/lib/validation/attendance";
+import { updateAttendanceNotesSchema } from "@/lib/validation/report";
 
 async function requestMeta() {
   const hdrs = await headers();
@@ -93,6 +94,24 @@ export async function correctAttendanceAction(
     return { success: true };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "Failed to correct attendance" };
+  }
+}
+
+export async function updateAttendanceNotesAction(
+  attendanceId: string,
+  input: unknown,
+): Promise<ActionResult> {
+  const parsed = updateAttendanceNotesSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await attendanceService.updateAttendanceAdminNotes(attendanceId, parsed.data.notes, session, meta);
+    revalidatePath(`/reports/attendance/${attendanceId}`);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to save notes" };
   }
 }
 

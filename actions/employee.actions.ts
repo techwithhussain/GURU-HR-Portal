@@ -4,9 +4,12 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import * as employeeService from "@/services/employeeService";
+import * as authService from "@/services/authService";
 import { requireSession } from "@/services/sessionService";
 import { getClientIp } from "@/lib/network/getClientIp";
 import {
+  bulkAssignShiftSchema,
+  bulkEmployeeIdsSchema,
   createEmployeeSchema,
   employeeSearchSchema,
   updateEmployeeSchema,
@@ -74,25 +77,40 @@ export async function updateEmployeeAction(
   redirect("/admin/employees");
 }
 
-export async function deactivateEmployeeAction(employeeId: string): Promise<void> {
-  const session = await requireSession();
-  const meta = await requestMeta();
-  await employeeService.deactivateEmployee(employeeId, session, meta);
-  revalidatePath("/admin/employees");
+export async function deactivateEmployeeAction(employeeId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await employeeService.deactivateEmployee(employeeId, session, meta);
+    revalidatePath("/admin/employees");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to deactivate employee" };
+  }
 }
 
-export async function activateEmployeeAction(employeeId: string): Promise<void> {
-  const session = await requireSession();
-  const meta = await requestMeta();
-  await employeeService.activateEmployee(employeeId, session, meta);
-  revalidatePath("/admin/employees");
+export async function activateEmployeeAction(employeeId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await employeeService.activateEmployee(employeeId, session, meta);
+    revalidatePath("/admin/employees");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to activate employee" };
+  }
 }
 
-export async function deleteEmployeeAction(employeeId: string): Promise<void> {
-  const session = await requireSession();
-  const meta = await requestMeta();
-  await employeeService.deleteEmployee(employeeId, session, meta);
-  revalidatePath("/admin/employees");
+export async function deleteEmployeeAction(employeeId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await employeeService.deleteEmployee(employeeId, session, meta);
+    revalidatePath("/admin/employees");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to delete employee" };
+  }
 }
 
 export async function searchEmployeesAction(input: unknown) {
@@ -106,4 +124,119 @@ export async function searchEmployeesAction(input: unknown) {
 export async function getEmployeeAction(employeeId: string) {
   const session = await requireSession();
   return employeeService.getEmployeeById(employeeId, session);
+}
+
+export interface ActionResult<T = null> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+export async function resignEmployeeAction(employeeId: string): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await employeeService.setEmployeeStatus(employeeId, "RESIGNED", session, meta);
+    revalidatePath("/admin/employees");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to mark employee resigned" };
+  }
+}
+
+export async function getEmployeeManagementStatsAction() {
+  const session = await requireSession();
+  return employeeService.getEmployeeManagementStats(session);
+}
+
+export async function getEmployeeProfileAction(employeeId: string) {
+  const session = await requireSession();
+  return employeeService.getEmployeeProfile(employeeId, session);
+}
+
+export async function bulkActivateEmployeesAction(input: unknown): Promise<ActionResult<employeeService.BulkResult>> {
+  const parsed = bulkEmployeeIdsSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const session = await requireSession();
+  const meta = await requestMeta();
+  const result = await employeeService.bulkActivateEmployees(parsed.data.employeeIds, session, meta);
+  revalidatePath("/admin/employees");
+  return { success: true, data: result };
+}
+
+export async function bulkSetStatusAction(
+  input: unknown,
+  status: "INACTIVE" | "RESIGNED",
+): Promise<ActionResult<employeeService.BulkResult>> {
+  const parsed = bulkEmployeeIdsSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const session = await requireSession();
+  const meta = await requestMeta();
+  const result = await employeeService.bulkSetStatus(parsed.data.employeeIds, status, session, meta);
+  revalidatePath("/admin/employees");
+  return { success: true, data: result };
+}
+
+export async function bulkDeleteEmployeesAction(input: unknown): Promise<ActionResult<employeeService.BulkResult>> {
+  const parsed = bulkEmployeeIdsSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const session = await requireSession();
+  const meta = await requestMeta();
+  const result = await employeeService.bulkDeleteEmployees(parsed.data.employeeIds, session, meta);
+  revalidatePath("/admin/employees");
+  return { success: true, data: result };
+}
+
+export async function bulkAssignShiftAction(input: unknown): Promise<ActionResult<employeeService.BulkResult>> {
+  const parsed = bulkAssignShiftSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const session = await requireSession();
+  const meta = await requestMeta();
+  const result = await employeeService.bulkAssignShift(
+    parsed.data.employeeIds,
+    parsed.data.shiftId,
+    session,
+    meta,
+  );
+  revalidatePath("/admin/employees");
+  return { success: true, data: result };
+}
+
+export async function adminResetPasswordAction(targetUserId: string): Promise<ActionResult<{ tempPassword: string }>> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    const result = await authService.adminResetPassword(targetUserId, session, meta);
+    return { success: true, data: result };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to reset password" };
+  }
+}
+
+export async function lockAccountAction(targetUserId: string): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await authService.lockAccount(targetUserId, session, meta);
+    revalidatePath("/admin/employees");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to lock account" };
+  }
+}
+
+export async function unlockAccountAction(targetUserId: string): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await authService.unlockAccount(targetUserId, session, meta);
+    revalidatePath("/admin/employees");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "Failed to unlock account" };
+  }
 }

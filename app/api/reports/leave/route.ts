@@ -4,10 +4,13 @@ import { getLeaveReport } from "@/services/reportsService";
 import { reportFiltersSchema, reportFormatSchema } from "@/lib/validation/report";
 import { toCsv, type ReportColumn } from "@/lib/reports/toCsv";
 import { toExcelBuffer } from "@/lib/reports/toExcel";
+import { toTablePdfBuffer } from "@/lib/reports/toPdf";
 
 const COLUMNS: ReportColumn[] = [
+  { key: "employeeCode", label: "Employee ID" },
   { key: "employeeName", label: "Employee" },
   { key: "department", label: "Department" },
+  { key: "designation", label: "Designation" },
   { key: "type", label: "Type" },
   { key: "startDate", label: "Start Date" },
   { key: "endDate", label: "End Date" },
@@ -30,6 +33,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const rows = await getLeaveReport(parsed.data, session);
+
+    if (format === "pdf") {
+      const buffer = await toTablePdfBuffer(rows, COLUMNS, "Leave Report");
+      return new Response(new Uint8Array(buffer), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": 'attachment; filename="leave-report.pdf"',
+        },
+      });
+    }
 
     if (format === "xlsx") {
       const buffer = await toExcelBuffer(rows, COLUMNS, "Leave");

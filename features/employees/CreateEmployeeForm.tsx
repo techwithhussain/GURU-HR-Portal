@@ -6,6 +6,7 @@ import { createEmployeeAction, type CreateEmployeeFormState } from "@/actions/em
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PhotoUpload } from "@/features/employees/PhotoUpload";
 
 interface Option {
   id: string;
@@ -57,6 +58,8 @@ export function CreateEmployeeForm({
 
   return (
     <form action={formAction} className="grid max-w-xl gap-4">
+      <PhotoUpload />
+
       <div className="space-y-2">
         <Label htmlFor="employeeCode">Employee ID</Label>
         <Input id="employeeCode" name="employeeCode" required />
@@ -76,6 +79,11 @@ export function CreateEmployeeForm({
           <Label htmlFor="phone">Phone</Label>
           <Input id="phone" name="phone" />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="address">Address</Label>
+        <Input id="address" name="address" />
       </div>
 
       <div className="space-y-2">

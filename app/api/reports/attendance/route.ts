@@ -4,15 +4,20 @@ import { getAttendanceReport } from "@/services/reportsService";
 import { reportFiltersSchema, reportFormatSchema } from "@/lib/validation/report";
 import { toCsv, type ReportColumn } from "@/lib/reports/toCsv";
 import { toExcelBuffer } from "@/lib/reports/toExcel";
+import { toTablePdfBuffer } from "@/lib/reports/toPdf";
 
 const COLUMNS: ReportColumn[] = [
+  { key: "employeeCode", label: "Employee ID" },
   { key: "employeeName", label: "Employee" },
   { key: "department", label: "Department" },
+  { key: "designation", label: "Designation" },
+  { key: "shiftName", label: "Shift" },
   { key: "date", label: "Date" },
   { key: "status", label: "Status" },
   { key: "checkInAt", label: "Check In" },
   { key: "checkOutAt", label: "Check Out" },
   { key: "workingMinutes", label: "Working Minutes" },
+  { key: "breakMinutes", label: "Break Minutes" },
   { key: "lateMinutes", label: "Late Minutes" },
   { key: "overtimeMinutes", label: "Overtime Minutes" },
   { key: "earlyExitMinutes", label: "Early Exit Minutes" },
@@ -31,6 +36,16 @@ export async function GET(request: NextRequest) {
 
   try {
     const rows = await getAttendanceReport(parsed.data, session);
+
+    if (format === "pdf") {
+      const buffer = await toTablePdfBuffer(rows, COLUMNS, "Attendance Summary Report");
+      return new Response(new Uint8Array(buffer), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": 'attachment; filename="attendance-report.pdf"',
+        },
+      });
+    }
 
     if (format === "xlsx") {
       const buffer = await toExcelBuffer(rows, COLUMNS, "Attendance");

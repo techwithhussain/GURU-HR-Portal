@@ -419,6 +419,40 @@ export async function autoCloseStaleAttendance(): Promise<{ closedCount: number 
   return { closedCount };
 }
 
+export async function updateAttendanceAdminNotes(
+  attendanceId: string,
+  notes: string,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+) {
+  requirePermission(actor, "attendance.correct");
+
+  const existing = await prisma.attendance.findUnique({
+    where: { id: attendanceId },
+    select: { id: true, adminNotes: true },
+  });
+  if (!existing) throw new NotFoundError("Attendance record not found");
+
+  const trimmed = notes.trim();
+  const updated = await prisma.attendance.update({
+    where: { id: attendanceId },
+    data: { adminNotes: trimmed.length > 0 ? trimmed : null },
+  });
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "attendance.notes_updated",
+    targetEntity: "attendance",
+    targetId: attendanceId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    before: { adminNotes: existing.adminNotes },
+    after: { adminNotes: updated.adminNotes },
+  });
+
+  return updated;
+}
+
 export async function correctAttendance(
   attendanceId: string,
   input: CorrectAttendanceInput,

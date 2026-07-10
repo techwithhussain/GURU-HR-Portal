@@ -2,7 +2,8 @@ import "server-only";
 import { createHash, randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
-import { hashPassword, validatePasswordPolicy, verifyPassword } from "@/lib/password";
+import { generateTempPassword, hashPassword, validatePasswordPolicy, verifyPassword } from "@/lib/password";
+import { requirePermission } from "@/lib/rbac/permissions";
 import {
   createSession,
   getSessionContext,
@@ -13,6 +14,13 @@ import {
 import { recordAudit } from "@/services/auditService";
 import { sendMail } from "@/lib/mailer";
 import { notifyUser, notifyUsers } from "@/services/notificationService";
+import { NotFoundError, type RequestMeta } from "@/services/employeeService";
+import type { SessionContext } from "@/types/session";
+
+// A locked-forever sentinel for admin-initiated locks — far enough in the
+// future to never expire on its own (self-service lockouts use a short,
+// auto-expiring `lockedUntil`; this distinguishes an explicit admin lock).
+const ADMIN_LOCK_SENTINEL = new Date("2099-01-01T00:00:00.000Z");
 
 export interface LoginInput {
   employeeCode: string;
@@ -275,4 +283,102 @@ export async function resetPassword(
   });
 
   return { ok: true };
+}
+
+/**
+ * Admin-initiated password reset. Reuses the same fields the self-service
+ * flow (`resetPassword` above) governs — clears lockout state together with
+ * the password, exactly like a self-reset, so an admin reset can't leave an
+ * account both password-reset and still locked. Returns the new temporary
+ * password once, for the admin UI to display (never persisted in plaintext).
+ */
+export async function adminResetPassword(
+  targetUserId: string,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+): Promise<{ tempPassword: string }> {
+  requirePermission(actor, "employee.manage");
+
+  const user = await prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true, email: true } });
+  if (!user) throw new NotFoundError("User not found");
+
+  const tempPassword = generateTempPassword();
+  const passwordHash = await hashPassword(tempPassword);
+
+  await prisma.user.update({
+    where: { id: targetUserId },
+    data: {
+      passwordHash,
+      mustChangePassword: true,
+      failedLoginAttempts: 0,
+      lastFailedLoginAt: null,
+      lockedUntil: null,
+    },
+  });
+
+  await revokeAllSessionsForUser(targetUserId);
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "user.password_reset_by_admin",
+    targetEntity: "user",
+    targetId: targetUserId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+
+  await sendMail({
+    to: user.email,
+    subject: "Your GDA EMS password has been reset",
+    text: `An administrator has reset your password. Your new temporary password is: ${tempPassword}\n\nYou will be asked to change it on your next login.`,
+  });
+
+  return { tempPassword };
+}
+
+export async function lockAccount(
+  targetUserId: string,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+): Promise<void> {
+  requirePermission(actor, "employee.manage");
+
+  const user = await prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true } });
+  if (!user) throw new NotFoundError("User not found");
+
+  await prisma.user.update({ where: { id: targetUserId }, data: { lockedUntil: ADMIN_LOCK_SENTINEL } });
+  await revokeAllSessionsForUser(targetUserId);
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "user.locked_by_admin",
+    targetEntity: "user",
+    targetId: targetUserId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+}
+
+export async function unlockAccount(
+  targetUserId: string,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+): Promise<void> {
+  requirePermission(actor, "employee.manage");
+
+  const user = await prisma.user.findUnique({ where: { id: targetUserId }, select: { id: true } });
+  if (!user) throw new NotFoundError("User not found");
+
+  await prisma.user.update({
+    where: { id: targetUserId },
+    data: { lockedUntil: null, failedLoginAttempts: 0 },
+  });
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "user.unlocked_by_admin",
+    targetEntity: "user",
+    targetId: targetUserId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
 }
