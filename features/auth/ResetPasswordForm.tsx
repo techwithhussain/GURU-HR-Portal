@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { resetPasswordAction, type ResetPasswordFormState } from "@/actions/auth.actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 const initialState: ResetPasswordFormState = {};
@@ -16,10 +16,9 @@ export function ResetPasswordForm({ token }: { token: string }) {
       <input type="hidden" name="token" value={token} />
       <div className="space-y-2">
         <Label htmlFor="newPassword">New password</Label>
-        <Input
+        <PasswordInput
           id="newPassword"
           name="newPassword"
-          type="password"
           autoComplete="new-password"
           required
         />

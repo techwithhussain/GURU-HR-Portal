@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Coffee, LogIn, LogOut, Pause, Play, Timer as TimerIcon, Clock3, Sunrise } from "lucide-react";
+import { Check, Coffee, LogIn, LogOut, Pause, Play, Timer as TimerIcon, Clock3, Sunrise } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -89,6 +89,76 @@ function buildTimeline(status: AttendanceStatus): TimelineEntry[] {
     entries.push({ label: "Check Out", at: new Date(status.attendance.checkOutAt), kind: "out" });
   }
   return entries.sort((a, b) => a.at.getTime() - b.at.getTime());
+}
+
+type StepState = "done" | "active" | "upcoming" | "pending" | "skipped";
+
+interface StepInfo {
+  label: string;
+  icon: typeof LogIn;
+  state: StepState;
+  time?: string;
+}
+
+const STEP_STYLE: Record<StepState, { circle: string; text: string; line: string }> = {
+  done: { circle: "bg-emerald-500 text-white ring-4 ring-emerald-100", text: "text-foreground", line: "bg-emerald-400" },
+  active: { circle: "bg-orange-500 text-white ring-4 ring-orange-100 animate-pulse", text: "text-foreground", line: "bg-border" },
+  upcoming: { circle: "bg-muted text-muted-foreground ring-4 ring-muted/50", text: "text-muted-foreground", line: "bg-border" },
+  pending: { circle: "bg-muted text-muted-foreground ring-4 ring-muted/50", text: "text-muted-foreground", line: "bg-border" },
+  skipped: { circle: "bg-muted text-muted-foreground ring-4 ring-muted/50", text: "text-muted-foreground line-through decoration-1", line: "bg-border" },
+};
+
+function AttendanceStepper({ status }: { status: AttendanceStatus }) {
+  const checkInDone = status.state !== "NOT_CHECKED_IN";
+  const checkedOut = status.state === "CHECKED_OUT";
+  const onBreak = status.state === "ON_BREAK";
+  const hadBreak = status.state !== "NOT_CHECKED_IN" && status.attendance.breaks.length > 0;
+
+  const steps: StepInfo[] = [
+    {
+      label: "Check In",
+      icon: LogIn,
+      state: checkInDone ? "done" : "pending",
+      time: checkInDone ? fmtTime(new Date(status.attendance.checkInAt!)) : undefined,
+    },
+    {
+      label: "Break",
+      icon: Coffee,
+      state: onBreak ? "active" : checkedOut ? (hadBreak ? "done" : "skipped") : checkInDone ? "upcoming" : "pending",
+      time: onBreak
+        ? "In progress"
+        : hadBreak && checkedOut
+          ? fmtTime(new Date(status.attendance.breaks[status.attendance.breaks.length - 1].startAt))
+          : undefined,
+    },
+    {
+      label: "Check Out",
+      icon: LogOut,
+      state: checkedOut ? "done" : "pending",
+      time: checkedOut ? fmtTime(new Date(status.attendance.checkOutAt!)) : undefined,
+    },
+  ];
+
+  return (
+    <div className="flex items-center rounded-2xl border border-border/60 bg-muted/20 px-4 py-4">
+      {steps.map((step, i) => {
+        const style = STEP_STYLE[step.state];
+        const Icon = step.state === "done" ? Check : step.icon;
+        return (
+          <div key={step.label} className={i < steps.length - 1 ? "flex flex-1 items-center" : "flex items-center"}>
+            <div className="flex w-24 shrink-0 flex-col items-center gap-1.5 text-center sm:w-28">
+              <span className={`flex size-9 items-center justify-center rounded-full ${style.circle}`}>
+                <Icon className="size-4" />
+              </span>
+              <span className={`text-xs font-semibold ${style.text}`}>{step.label}</span>
+              <span className="text-[11px] text-muted-foreground">{step.time ?? "—"}</span>
+            </div>
+            {i < steps.length - 1 && <span className={`mb-6 h-0.5 flex-1 rounded-full ${style.line}`} />}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: AttendanceStatus }) {
@@ -201,6 +271,8 @@ export function CheckInPanel({
         <StatusBadge status={status} />
       </CardHeader>
       <CardContent className="space-y-7 pt-6">
+        <AttendanceStepper status={status} />
+
         <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           <div className="space-y-5">
             <div className="rounded-2xl bg-gradient-to-br from-brand-navy to-brand-navy-soft px-6 py-5 text-white shadow-soft">
@@ -238,7 +310,7 @@ export function CheckInPanel({
                     onClick={() => setBreakDialogOpen(true)}
                     className="rounded-xl bg-orange-100 px-5 text-orange-700 shadow-soft hover:bg-orange-200"
                   >
-                    <Pause /> Pause
+                    <Pause /> Break
                   </Button>
                   <Button
                     disabled={isPending}

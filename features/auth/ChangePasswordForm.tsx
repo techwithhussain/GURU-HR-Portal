@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { changePasswordAction, type ChangePasswordFormState } from "@/actions/auth.actions";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 
 const initialState: ChangePasswordFormState = {};
@@ -15,20 +15,18 @@ export function ChangePasswordForm() {
     <form action={formAction} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="currentPassword">Current password</Label>
-        <Input
+        <PasswordInput
           id="currentPassword"
           name="currentPassword"
-          type="password"
           autoComplete="current-password"
           required
         />
       </div>
       <div className="space-y-2">
         <Label htmlFor="newPassword">New password</Label>
-        <Input
+        <PasswordInput
           id="newPassword"
           name="newPassword"
-          type="password"
           autoComplete="new-password"
           required
         />
