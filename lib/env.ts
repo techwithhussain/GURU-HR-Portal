@@ -12,6 +12,7 @@ const envSchema = z.object({
   ACCOUNT_LOCKOUT_DURATION_MINUTES: z.coerce.number().int().positive().default(15),
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).default(1),
   CRON_SECRET: z.string().min(16),
+  TV_DISPLAY_TOKEN: z.string().min(16),
   APP_URL: z.url().default("http://localhost:3000"),
 
   // Email (SMTP) — all optional; unset SMTP_HOST means the mailer falls back

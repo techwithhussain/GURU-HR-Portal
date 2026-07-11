@@ -335,6 +335,54 @@ export async function getCurrentStatus(employeeId: string) {
   return { state: "CHECKED_OUT" as const, attendance: current };
 }
 
+export interface EmployeeOnBreak {
+  breakId: string;
+  type: string;
+  startAt: Date;
+  employeeId: string;
+  employeeName: string;
+  department: string | null;
+  profileImageUrl: string | null;
+}
+
+/**
+ * Currently-active breaks across all employees — powers the office TV board
+ * and the admin live-alert listener. No `endAt` means the break is ongoing.
+ */
+export async function getEmployeesOnBreak(): Promise<EmployeeOnBreak[]> {
+  const breaks = await prisma.break.findMany({
+    where: { endAt: null },
+    select: {
+      id: true,
+      type: true,
+      startAt: true,
+      attendance: {
+        select: {
+          employee: {
+            select: {
+              id: true,
+              fullName: true,
+              profileImageUrl: true,
+              department: { select: { name: true } },
+            },
+          },
+        },
+      },
+    },
+    orderBy: { startAt: "asc" },
+  });
+
+  return breaks.map((b) => ({
+    breakId: b.id,
+    type: b.type,
+    startAt: b.startAt,
+    employeeId: b.attendance.employee.id,
+    employeeName: b.attendance.employee.fullName,
+    department: b.attendance.employee.department?.name ?? null,
+    profileImageUrl: b.attendance.employee.profileImageUrl,
+  }));
+}
+
 /**
  * Closes attendance rows whose shift ended without a checkout, so they stop
  * silently sitting open forever. Checkout is pinned to the shift's scheduled

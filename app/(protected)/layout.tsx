@@ -21,6 +21,7 @@ import { getSessionContext } from "@/services/sessionService";
 import { getUnreadCount } from "@/services/notificationService";
 import { getMyDashboardProfile } from "@/services/dashboardService";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
+import { BreakAlertListener } from "@/features/notifications/BreakAlertListener";
 import { SidebarNav, type SidebarLink } from "@/features/shell/SidebarNav";
 import { LiveClock } from "@/features/shell/LiveClock";
 import { UserMenu } from "@/features/shell/UserMenu";
@@ -70,6 +71,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
   return (
     <div className="flex min-h-full">
+      {isAdmin && <BreakAlertListener />}
       <aside className="flex w-64 shrink-0 flex-col bg-gradient-to-b from-sidebar to-brand-navy-soft text-sidebar-foreground">
         <div className="flex items-center gap-2.5 px-5 py-6">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/10 p-1.5 ring-1 ring-white/10">
