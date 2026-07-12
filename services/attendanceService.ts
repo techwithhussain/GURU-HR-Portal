@@ -19,6 +19,11 @@ import {
 import type { CorrectAttendanceInput } from "@/lib/validation/attendance";
 import { notifyUsers } from "@/services/notificationService";
 
+// Office-wide cap on simultaneous breaks — keeps enough staff on the floor
+// at any moment. Not admin-configurable yet; change this constant if the
+// number needs to move.
+const MAX_CONCURRENT_BREAKS = 3;
+
 export class ConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -232,6 +237,13 @@ export async function startBreak(
   });
   if (existingOpenBreak) throw new ConflictError("A break is already active");
 
+  const activeBreaksCompanyWide = await prisma.break.count({ where: { endAt: null } });
+  if (activeBreaksCompanyWide >= MAX_CONCURRENT_BREAKS) {
+    throw new ConflictError(
+      `Break is full right now (${MAX_CONCURRENT_BREAKS}/${MAX_CONCURRENT_BREAKS} slots taken) — please wait for a colleague to finish their break.`,
+    );
+  }
+
   const shift = await prisma.shift.findUnique({
     where: { id: attendance.shiftId },
     select: { breakAllowanceMin: true },
@@ -330,8 +342,21 @@ export async function getCurrentStatus(employeeId: string) {
   if (!current) return { state: "NOT_CHECKED_IN" as const };
 
   const activeBreak = current.breaks.find((b) => !b.endAt);
-  if (activeBreak) return { state: "ON_BREAK" as const, attendance: current, activeBreak };
-  if (!current.checkOutAt) return { state: "CHECKED_IN" as const, attendance: current };
+  if (!current.checkOutAt) {
+    const [shift, activeBreaksCompanyWide] = await Promise.all([
+      prisma.shift.findUnique({ where: { id: current.shiftId }, select: { breakAllowanceMin: true } }),
+      prisma.break.count({ where: { endAt: null } }),
+    ]);
+    const usedMinutes = current.breaks.reduce((sum, b) => sum + (b.durationMin ?? 0), 0);
+    const breakBudget =
+      shift?.breakAllowanceMin != null ? { usedMinutes, allowanceMinutes: shift.breakAllowanceMin } : null;
+    const companyBreakSlots = { active: activeBreaksCompanyWide, max: MAX_CONCURRENT_BREAKS };
+
+    if (activeBreak) {
+      return { state: "ON_BREAK" as const, attendance: current, activeBreak, breakBudget, companyBreakSlots };
+    }
+    return { state: "CHECKED_IN" as const, attendance: current, breakBudget, companyBreakSlots };
+  }
   return { state: "CHECKED_OUT" as const, attendance: current };
 }
 

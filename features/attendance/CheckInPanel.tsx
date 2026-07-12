@@ -264,6 +264,15 @@ export function CheckInPanel({
   const timeline = buildTimeline(status);
   const lastBreak = status.state !== "NOT_CHECKED_IN" ? [...status.attendance.breaks].pop() : undefined;
 
+  let breakBlockedReason: string | null = null;
+  if (status.state === "CHECKED_IN") {
+    if (status.breakBudget && status.breakBudget.usedMinutes >= status.breakBudget.allowanceMinutes) {
+      breakBlockedReason = "Today's break time is over.";
+    } else if (status.companyBreakSlots && status.companyBreakSlots.active >= status.companyBreakSlots.max) {
+      breakBlockedReason = "Break is full right now — please wait for a colleague to finish.";
+    }
+  }
+
   return (
     <Card className="overflow-hidden rounded-2xl border-0 shadow-elevated ring-1 ring-black/[0.03]">
       <CardHeader className="flex flex-row items-center justify-between border-b border-border/60 pb-4">
@@ -306,9 +315,10 @@ export function CheckInPanel({
                 <>
                   <Button
                     variant="secondary"
-                    disabled={isPending}
+                    disabled={isPending || !!breakBlockedReason}
+                    title={breakBlockedReason ?? undefined}
                     onClick={() => setBreakDialogOpen(true)}
-                    className="rounded-xl bg-orange-100 px-5 text-orange-700 shadow-soft hover:bg-orange-200"
+                    className="rounded-xl bg-orange-100 px-5 text-orange-700 shadow-soft hover:bg-orange-200 disabled:opacity-60"
                   >
                     <Pause /> Break
                   </Button>
@@ -321,6 +331,8 @@ export function CheckInPanel({
                   </Button>
                 </>
               )}
+
+              {breakBlockedReason && <p className="w-full text-xs text-amber-700">{breakBlockedReason}</p>}
 
               {status.state === "ON_BREAK" && (
                 <Button
