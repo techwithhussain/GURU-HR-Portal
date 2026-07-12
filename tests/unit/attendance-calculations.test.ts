@@ -44,11 +44,16 @@ describe("attendanceDateForCheckIn", () => {
   it("attributes a night-shift check-in to its own calendar day", () => {
     const checkIn = istInstant("2026-07-07T22:00:00");
     const attendanceDate = attendanceDateForCheckIn(checkIn, TZ);
-    // The stored value is the UTC instant of 2026-07-07 00:00 IST, which is
-    // 2026-07-06T18:30:00Z — the ISO date component date-shifts because of the
-    // +05:30 offset, but re-reading it with setZone(TZ) yields local midnight
-    // of 2026-07-07 again (exercised indirectly via the night-shift tests below).
-    expect(attendanceDate.toISOString().slice(0, 10)).toBe("2026-07-06");
+    // Stored as UTC midnight of the *local* calendar date (2026-07-07), so a
+    // @db.Date column persists the correct day — never the local-midnight
+    // instant converted to UTC, which would date-shift to the previous day.
+    expect(attendanceDate.toISOString().slice(0, 10)).toBe("2026-07-07");
+  });
+
+  it("attributes a morning check-in to the same local calendar day", () => {
+    const checkIn = istInstant("2026-07-12T21:31:00");
+    const attendanceDate = attendanceDateForCheckIn(checkIn, TZ);
+    expect(attendanceDate.toISOString().slice(0, 10)).toBe("2026-07-12");
   });
 });
 

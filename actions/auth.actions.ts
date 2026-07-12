@@ -6,6 +6,10 @@ import { z } from "zod";
 import * as authService from "@/services/authService";
 import { requireSession } from "@/services/sessionService";
 import { getClientIp } from "@/lib/network/getClientIp";
+import { checkRateLimit } from "@/lib/rateLimit";
+
+const LOGIN_RATE_LIMIT = { max: 20, windowMs: 10 * 60_000 }; // 20 attempts / 10 min per IP
+const FORGOT_PASSWORD_RATE_LIMIT = { max: 5, windowMs: 60 * 60_000 }; // 5 requests / hour per IP
 
 const loginSchema = z.object({
   employeeCode: z.string().min(1, "Employee ID is required"),
@@ -29,9 +33,15 @@ export async function loginAction(
   }
 
   const hdrs = await headers();
+  const ip = getClientIp(hdrs);
+
+  if (!checkRateLimit(`login:${ip ?? "unknown"}`, LOGIN_RATE_LIMIT.max, LOGIN_RATE_LIMIT.windowMs)) {
+    return { error: "Too many login attempts from this network. Please try again in a few minutes." };
+  }
+
   const result = await authService.login({
     ...parsed.data,
-    ip: getClientIp(hdrs),
+    ip,
     userAgent: hdrs.get("user-agent"),
   });
 
@@ -93,10 +103,17 @@ export async function forgotPasswordAction(
   formData: FormData,
 ): Promise<ForgotPasswordFormState> {
   const parsed = forgotPasswordSchema.safeParse({ identifier: formData.get("identifier") });
-  if (parsed.success) {
+  const hdrs = await headers();
+  const ip = getClientIp(hdrs);
+
+  if (
+    parsed.success &&
+    checkRateLimit(`forgot-password:${ip ?? "unknown"}`, FORGOT_PASSWORD_RATE_LIMIT.max, FORGOT_PASSWORD_RATE_LIMIT.windowMs)
+  ) {
     await authService.requestPasswordReset(parsed.data.identifier);
   }
-  // Always report success regardless of whether the account exists (no enumeration).
+  // Always report success regardless of whether the account exists or the
+  // request was rate-limited (no enumeration, no signal to an attacker).
   return { submitted: true };
 }
 

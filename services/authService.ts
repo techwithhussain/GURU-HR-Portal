@@ -1,5 +1,6 @@
 import "server-only";
 import { createHash, randomBytes } from "crypto";
+import { Prisma } from "@/lib/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { generateTempPassword, hashPassword, validatePasswordPolicy, verifyPassword } from "@/lib/password";
@@ -100,28 +101,43 @@ export async function login(input: LoginInput): Promise<LoginResult> {
 }
 
 async function recordFailedAttempt(
-  user: { id: string; failedLoginAttempts: number; lastFailedLoginAt: Date | null },
+  user: { id: string },
   input: LoginInput,
   now: Date,
 ): Promise<void> {
   const windowMs = env.ACCOUNT_LOCKOUT_WINDOW_MINUTES * 60_000;
-  const withinWindow = user.lastFailedLoginAt
-    ? now.getTime() - user.lastFailedLoginAt.getTime() <= windowMs
-    : false;
-  const nextAttempts = withinWindow ? user.failedLoginAttempts + 1 : 1;
 
-  const willLock = nextAttempts >= env.ACCOUNT_LOCKOUT_MAX_ATTEMPTS;
+  // Re-read and update the counter inside one Serializable transaction so two
+  // concurrent failed attempts for the same account can't both read the same
+  // base count and under-count toward the lockout threshold.
+  const { nextAttempts, willLock } = await prisma.$transaction(
+    async (tx) => {
+      const fresh = await tx.user.findUniqueOrThrow({
+        where: { id: user.id },
+        select: { failedLoginAttempts: true, lastFailedLoginAt: true },
+      });
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      failedLoginAttempts: nextAttempts,
-      lastFailedLoginAt: now,
-      lockedUntil: willLock
-        ? new Date(now.getTime() + env.ACCOUNT_LOCKOUT_DURATION_MINUTES * 60_000)
-        : undefined,
+      const withinWindow = fresh.lastFailedLoginAt
+        ? now.getTime() - fresh.lastFailedLoginAt.getTime() <= windowMs
+        : false;
+      const nextAttempts = withinWindow ? fresh.failedLoginAttempts + 1 : 1;
+      const willLock = nextAttempts >= env.ACCOUNT_LOCKOUT_MAX_ATTEMPTS;
+
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginAttempts: nextAttempts,
+          lastFailedLoginAt: now,
+          lockedUntil: willLock
+            ? new Date(now.getTime() + env.ACCOUNT_LOCKOUT_DURATION_MINUTES * 60_000)
+            : undefined,
+        },
+      });
+
+      return { nextAttempts, willLock };
     },
-  });
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  );
 
   await recordAudit({
     actorUserId: user.id,

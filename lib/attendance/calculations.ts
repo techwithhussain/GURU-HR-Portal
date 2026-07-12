@@ -19,11 +19,12 @@ export function isNightShift(shift: Pick<ShiftTiming, "startMinutesOfDay" | "end
  * day it started, since check-out (after midnight) never changes it.
  */
 export function attendanceDateForCheckIn(checkInAt: Date, timezone: string): Date {
-  return DateTime.fromJSDate(checkInAt, { zone: "utc" })
-    .setZone(timezone)
-    .startOf("day")
-    .toUTC()
-    .toJSDate();
+  const local = DateTime.fromJSDate(checkInAt, { zone: "utc" }).setZone(timezone);
+  // Store the local calendar date's own numbers as UTC midnight — never convert
+  // the local-midnight *instant* to UTC, since for positive offsets (e.g.
+  // Asia/Kolkata) that instant falls on the previous UTC calendar day, which
+  // would silently truncate into the wrong date once written to a @db.Date column.
+  return DateTime.utc(local.year, local.month, local.day).toJSDate();
 }
 
 function shiftBoundaryInstant(

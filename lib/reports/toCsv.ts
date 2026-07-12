@@ -3,8 +3,17 @@ export interface ReportColumn {
   label: string;
 }
 
+// Prefixing a leading =, +, -, @, tab, or CR with a single quote neutralizes
+// spreadsheet formula/DDE execution (Excel/Sheets both treat a leading quote
+// as a "force text" marker and don't render it) — see OWASP's CSV Injection
+// guidance. Without this, a field like an employee's name could carry a
+// formula payload that runs when an admin opens the exported file in Excel.
+function neutralizeFormula(str: string): string {
+  return /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+}
+
 function escapeCsvValue(value: unknown): string {
-  const str = value == null ? "" : String(value);
+  const str = neutralizeFormula(value == null ? "" : String(value));
   if (/[",\n]/.test(str)) {
     return `"${str.replace(/"/g, '""')}"`;
   }

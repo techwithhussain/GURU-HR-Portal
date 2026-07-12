@@ -232,43 +232,53 @@ export async function startBreak(
 
   const attendance = await requireOpenAttendance(employeeId);
 
-  const existingOpenBreak = await prisma.break.findFirst({
-    where: { attendanceId: attendance.id, endAt: null },
-  });
-  if (existingOpenBreak) throw new ConflictError("A break is already active");
-
-  const activeBreaksCompanyWide = await prisma.break.count({ where: { endAt: null } });
-  if (activeBreaksCompanyWide >= MAX_CONCURRENT_BREAKS) {
-    throw new ConflictError(
-      `Break is full right now (${MAX_CONCURRENT_BREAKS}/${MAX_CONCURRENT_BREAKS} slots taken) — please wait for a colleague to finish their break.`,
-    );
-  }
-
-  const shift = await prisma.shift.findUnique({
-    where: { id: attendance.shiftId },
-    select: { breakAllowanceMin: true },
-  });
-  if (shift?.breakAllowanceMin != null) {
-    const breakAgg = await prisma.break.aggregate({
-      where: { attendanceId: attendance.id },
-      _sum: { durationMin: true },
-    });
-    const usedMinutes = breakAgg._sum.durationMin ?? 0;
-    if (usedMinutes >= shift.breakAllowanceMin) {
-      throw new ConflictError(
-        `Break allowance exceeded — this shift allows ${shift.breakAllowanceMin} minute(s) of break per day.`,
-      );
-    }
-  }
-
+  // The existing-break / concurrent-cap / daily-allowance checks and the
+  // insert all run inside one Serializable transaction, so two simultaneous
+  // requests can't both read "under the limit" and both insert — Postgres
+  // aborts one with a serialization failure, which we surface as a clean
+  // conflict below instead of letting the cap be exceeded.
   try {
-    const brk = await prisma.break.create({
-      data: {
-        attendanceId: attendance.id,
-        type: type as Prisma.BreakCreateInput["type"],
-        startAt: new Date(),
+    const brk = await prisma.$transaction(
+      async (tx) => {
+        const existingOpenBreak = await tx.break.findFirst({
+          where: { attendanceId: attendance.id, endAt: null },
+        });
+        if (existingOpenBreak) throw new ConflictError("A break is already active");
+
+        const activeBreaksCompanyWide = await tx.break.count({ where: { endAt: null } });
+        if (activeBreaksCompanyWide >= MAX_CONCURRENT_BREAKS) {
+          throw new ConflictError(
+            `Break is full right now (${MAX_CONCURRENT_BREAKS}/${MAX_CONCURRENT_BREAKS} slots taken) — please wait for a colleague to finish their break.`,
+          );
+        }
+
+        const shift = await tx.shift.findUnique({
+          where: { id: attendance.shiftId },
+          select: { breakAllowanceMin: true },
+        });
+        if (shift?.breakAllowanceMin != null) {
+          const breakAgg = await tx.break.aggregate({
+            where: { attendanceId: attendance.id },
+            _sum: { durationMin: true },
+          });
+          const usedMinutes = breakAgg._sum.durationMin ?? 0;
+          if (usedMinutes >= shift.breakAllowanceMin) {
+            throw new ConflictError(
+              `Break allowance exceeded — this shift allows ${shift.breakAllowanceMin} minute(s) of break per day.`,
+            );
+          }
+        }
+
+        return tx.break.create({
+          data: {
+            attendanceId: attendance.id,
+            type: type as Prisma.BreakCreateInput["type"],
+            startAt: new Date(),
+          },
+        });
       },
-    });
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
 
     await recordAudit({
       actorUserId: actor.userId,
@@ -287,6 +297,12 @@ export async function startBreak(
         where: { attendanceId: attendance.id, endAt: null },
       });
       if (existing) return existing;
+    }
+    // A serialization failure (P2034) means another concurrent request won
+    // the race for the same slot — treat it the same as "already active/full"
+    // rather than surfacing a raw transaction error.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2034") {
+      throw new ConflictError("That break slot was just taken — please try again.");
     }
     throw err;
   }

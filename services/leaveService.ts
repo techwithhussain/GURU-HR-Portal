@@ -233,6 +233,9 @@ export async function decideLeave(
   });
   if (!leave) throw new NotFoundError("Leave request not found");
   if (leave.status !== "APPLIED") throw new ConflictError("This leave request has already been decided.");
+  if (leave.employeeId === actor.employeeId) {
+    throw new ConflictError("You cannot approve or reject your own leave request.");
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.leave.update({
@@ -400,6 +403,9 @@ export async function updateLeave(
   if (!existing) throw new NotFoundError("Leave request not found");
   if (existing.status !== "APPLIED") {
     throw new ConflictError("Only a pending leave request can be edited.");
+  }
+  if (existing.employeeId === actor.employeeId) {
+    throw new ConflictError("You cannot edit your own leave request as an approver.");
   }
 
   const type = await requireLeaveType(input.typeId);
