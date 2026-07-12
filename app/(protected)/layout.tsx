@@ -116,7 +116,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
         </div>
       </aside>
 
-      <div className="flex min-h-full flex-1 flex-col">
+      <div className="flex min-h-full min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border/60 bg-white/80 px-6 py-3.5 backdrop-blur-md">
           <div className="relative w-full max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -134,7 +134,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
             <UserMenu fullName={fullName} employeeCode={session.employeeCode} roleName={session.roleName} />
           </div>
         </header>
-        <main className="bg-app-canvas flex flex-1 flex-col p-6">{children}</main>
+        <main className="bg-app-canvas flex min-w-0 flex-1 flex-col p-6">{children}</main>
       </div>
     </div>
   );
