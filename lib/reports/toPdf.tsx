@@ -85,7 +85,14 @@ function minutesLabel(min: number | null): string {
 
 function formatClock(iso: string | null): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  // Explicit timeZone is required here — this renders on the server (no
+  // browser locale to fall back on), and without it the server's own system
+  // timezone (often UTC in hosting) would be used instead of company local time.
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 export async function toEmployeeDetailPdfBuffer(data: EmployeeAttendanceDetail): Promise<Buffer> {

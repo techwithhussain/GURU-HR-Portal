@@ -32,6 +32,13 @@ async function getCompanyTimezone(): Promise<string> {
   return settings?.timezone ?? "Asia/Kolkata";
 }
 
+/** 12-hour local clock time for report exports (e.g. "11:47 PM") — raw ISO
+ * strings were previously exported as-is, overflowing fixed-width PDF cells. */
+function formatClockLabel(date: Date | null, timezone: string): string {
+  if (!date) return "";
+  return DateTime.fromJSDate(date, { zone: "utc" }).setZone(timezone).toFormat("h:mm a");
+}
+
 export interface AttendanceReportRow {
   attendanceId: string;
   employeeCode: string;
@@ -54,7 +61,10 @@ export async function getAttendanceReport(
   filters: ReportFilters,
   actor: SessionContext,
 ): Promise<AttendanceReportRow[]> {
-  const visibleEmployeeIds = await resolveVisibleEmployeeIds(actor);
+  const [visibleEmployeeIds, timezone] = await Promise.all([
+    resolveVisibleEmployeeIds(actor),
+    getCompanyTimezone(),
+  ]);
 
   const rows = await prisma.attendance.findMany({
     where: {
@@ -103,8 +113,8 @@ export async function getAttendanceReport(
     shiftName: row.shift.name,
     date: row.attendanceDate.toISOString().slice(0, 10),
     status: row.status,
-    checkInAt: row.checkInAt ? row.checkInAt.toISOString() : "",
-    checkOutAt: row.checkOutAt ? row.checkOutAt.toISOString() : "",
+    checkInAt: formatClockLabel(row.checkInAt, timezone),
+    checkOutAt: formatClockLabel(row.checkOutAt, timezone),
     workingMinutes: row.workingMinutes,
     breakMinutes: row.breakMinutes,
     lateMinutes: row.lateMinutes,
