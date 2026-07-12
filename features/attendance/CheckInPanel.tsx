@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Coffee, LogIn, LogOut, Pause, Play, Timer as TimerIcon, Clock3, Sunrise } from "lucide-react";
+import { Check, Coffee, LogIn, LogOut, Loader2, Pause, Play, Timer as TimerIcon, Clock3, Sunrise } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -236,6 +236,7 @@ export function CheckInPanel({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [pendingAction, setPendingAction] = useState<"checkIn" | "break" | "checkOut" | "resume" | null>(null);
   const [now, setNow] = useState<Date | null>(null);
   const [breakDialogOpen, setBreakDialogOpen] = useState(false);
 
@@ -245,20 +246,23 @@ export function CheckInPanel({
     return () => clearInterval(id);
   }, []);
 
-  function run(action: () => Promise<ActionResult>) {
+  function run(action: () => Promise<ActionResult>, actionName: typeof pendingAction) {
+    setPendingAction(actionName);
     startTransition(async () => {
       const result = await action();
       if (!result.success) {
         toast.error(result.error ?? "Something went wrong");
+        setPendingAction(null);
         return;
       }
       router.refresh();
+      setPendingAction(null);
     });
   }
 
   function handleSelectBreak(type: BreakOptionType) {
     setBreakDialogOpen(false);
-    run(() => startBreakAction({ type }));
+    run(() => startBreakAction({ type }), "break");
   }
 
   const timeline = buildTimeline(status);
@@ -304,10 +308,11 @@ export function CheckInPanel({
               {status.state === "NOT_CHECKED_IN" && (
                 <Button
                   disabled={isPending}
-                  onClick={() => run(checkInAction)}
+                  onClick={() => run(checkInAction, "checkIn")}
                   className="rounded-xl bg-emerald-600 px-5 shadow-soft shadow-emerald-600/20 hover:bg-emerald-700"
                 >
-                  <LogIn /> Check In
+                  {pendingAction === "checkIn" ? <Loader2 className="animate-spin" /> : <LogIn />}
+                  {pendingAction === "checkIn" ? "Checking in…" : "Check In"}
                 </Button>
               )}
 
@@ -320,14 +325,16 @@ export function CheckInPanel({
                     onClick={() => setBreakDialogOpen(true)}
                     className="rounded-xl bg-orange-100 px-5 text-orange-700 shadow-soft hover:bg-orange-200 disabled:opacity-60"
                   >
-                    <Pause /> Break
+                    {pendingAction === "break" ? <Loader2 className="animate-spin" /> : <Pause />}
+                    {pendingAction === "break" ? "Starting…" : "Break"}
                   </Button>
                   <Button
                     disabled={isPending}
-                    onClick={() => run(checkOutAction)}
+                    onClick={() => run(checkOutAction, "checkOut")}
                     className="rounded-xl bg-rose-600 px-5 shadow-soft shadow-rose-600/20 hover:bg-rose-700"
                   >
-                    <LogOut /> Check Out
+                    {pendingAction === "checkOut" ? <Loader2 className="animate-spin" /> : <LogOut />}
+                    {pendingAction === "checkOut" ? "Checking out…" : "Check Out"}
                   </Button>
                 </>
               )}
@@ -337,10 +344,11 @@ export function CheckInPanel({
               {status.state === "ON_BREAK" && (
                 <Button
                   disabled={isPending}
-                  onClick={() => run(endBreakAction)}
+                  onClick={() => run(endBreakAction, "resume")}
                   className="rounded-xl bg-blue-600 px-5 shadow-soft shadow-blue-600/20 hover:bg-blue-700"
                 >
-                  <Play /> Resume Work (Pause Off)
+                  {pendingAction === "resume" ? <Loader2 className="animate-spin" /> : <Play />}
+                  {pendingAction === "resume" ? "Resuming…" : "Resume Work (Pause Off)"}
                 </Button>
               )}
 
