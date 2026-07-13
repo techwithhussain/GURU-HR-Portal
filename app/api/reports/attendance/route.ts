@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { getSessionContext } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getAttendanceReport } from "@/services/reportsService";
 import { reportFiltersSchema, reportFormatSchema } from "@/lib/validation/report";
 import { toCsv, type ReportColumn } from "@/lib/reports/toCsv";
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err) {
-    return new Response(err instanceof Error ? err.message : "Failed to generate report", {
+    return new Response(toUserMessage(err, "Failed to generate report"), {
       status: 403,
     });
   }

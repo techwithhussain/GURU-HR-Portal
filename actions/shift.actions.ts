@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import * as shiftService from "@/services/shiftService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import { requirePermission } from "@/lib/rbac/permissions";
 import { createShiftSchema, updateShiftSchema } from "@/lib/validation/shift";
@@ -30,7 +31,7 @@ export async function createShiftAction(input: unknown): Promise<ActionResult<{ 
     revalidatePath("/admin/shifts");
     return { success: true, data: { shiftId: shift.id } };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to create shift" };
+    return { success: false, error: toUserMessage(err, "Failed to create shift") };
   }
 }
 
@@ -45,7 +46,7 @@ export async function updateShiftAction(shiftId: string, input: unknown): Promis
     revalidatePath("/admin/shifts");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to update shift" };
+    return { success: false, error: toUserMessage(err, "Failed to update shift") };
   }
 }
 
@@ -57,7 +58,7 @@ export async function deactivateShiftAction(shiftId: string): Promise<ActionResu
     revalidatePath("/admin/shifts");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to deactivate shift" };
+    return { success: false, error: toUserMessage(err, "Failed to deactivate shift") };
   }
 }
 
@@ -69,7 +70,7 @@ export async function activateShiftAction(shiftId: string): Promise<ActionResult
     revalidatePath("/admin/shifts");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to activate shift" };
+    return { success: false, error: toUserMessage(err, "Failed to activate shift") };
   }
 }
 
@@ -81,7 +82,7 @@ export async function deleteShiftAction(shiftId: string): Promise<ActionResult> 
     revalidatePath("/admin/shifts");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to delete shift" };
+    return { success: false, error: toUserMessage(err, "Failed to delete shift") };
   }
 }
 

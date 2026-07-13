@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import * as leaveService from "@/services/leaveService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import {
   applyLeaveSchema,
@@ -36,7 +37,7 @@ export async function applyLeaveAction(input: unknown): Promise<ActionResult<{ l
     revalidatePath("/leave");
     return { success: true, data: { leaveId: leave.id } };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to apply for leave" };
+    return { success: false, error: toUserMessage(err, "Failed to apply for leave") };
   }
 }
 
@@ -73,7 +74,7 @@ export async function decideLeaveAction(leaveId: string, input: unknown): Promis
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to decide on leave request" };
+    return { success: false, error: toUserMessage(err, "Failed to decide on leave request") };
   }
 }
 
@@ -89,7 +90,7 @@ export async function cancelLeaveAction(leaveId: string, input: unknown): Promis
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to cancel leave request" };
+    return { success: false, error: toUserMessage(err, "Failed to cancel leave request") };
   }
 }
 
@@ -104,7 +105,7 @@ export async function updateLeaveAction(leaveId: string, input: unknown): Promis
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to update leave request" };
+    return { success: false, error: toUserMessage(err, "Failed to update leave request") };
   }
 }
 
@@ -116,7 +117,7 @@ export async function deleteLeaveAction(leaveId: string): Promise<ActionResult> 
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to delete leave request" };
+    return { success: false, error: toUserMessage(err, "Failed to delete leave request") };
   }
 }
 
@@ -146,6 +147,6 @@ export async function setLeaveBalanceAction(input: unknown): Promise<ActionResul
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to set leave balance" };
+    return { success: false, error: toUserMessage(err, "Failed to set leave balance") };
   }
 }

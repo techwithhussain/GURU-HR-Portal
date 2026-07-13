@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import * as employeeImportService from "@/services/employeeImportService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import type { EmployeeImportResult } from "@/services/employeeImportService";
 
@@ -32,6 +33,6 @@ export async function importEmployeesAction(formData: FormData): Promise<ImportA
     revalidatePath("/admin/employees");
     return { success: true, data: result };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to import employees" };
+    return { success: false, error: toUserMessage(err, "Failed to import employees") };
   }
 }

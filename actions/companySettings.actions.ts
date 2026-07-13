@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import * as companySettingsService from "@/services/companySettingsService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import { updateCompanySettingsSchema } from "@/lib/validation/companySettings";
 
@@ -34,6 +35,6 @@ export async function updateCompanySettingsAction(input: unknown): Promise<Actio
     revalidatePath("/admin/settings");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to update settings" };
+    return { success: false, error: toUserMessage(err, "Failed to update settings") };
   }
 }

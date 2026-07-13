@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import * as employeeDocumentService from "@/services/employeeDocumentService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import { attachEmployeeDocumentSchema } from "@/lib/validation/employeeDocument";
 
@@ -29,7 +30,7 @@ export async function attachEmployeeDocumentAction(input: unknown): Promise<Acti
     revalidatePath(`/admin/employees/${parsed.data.employeeId}`);
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to attach document" };
+    return { success: false, error: toUserMessage(err, "Failed to attach document") };
   }
 }
 
@@ -41,6 +42,6 @@ export async function deleteEmployeeDocumentAction(documentId: string, employeeI
     revalidatePath(`/admin/employees/${employeeId}`);
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to delete document" };
+    return { success: false, error: toUserMessage(err, "Failed to delete document") };
   }
 }

@@ -1,4 +1,5 @@
 import { getSessionContext } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getEmployeeProfile } from "@/services/employeeService";
 import { toEmployeeProfilePdfBuffer } from "@/lib/reports/toPdf";
 
@@ -18,6 +19,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       },
     });
   } catch (err) {
-    return new Response(err instanceof Error ? err.message : "Failed to generate profile PDF", { status: 403 });
+    return new Response(toUserMessage(err, "Failed to generate profile PDF"), { status: 403 });
   }
 }

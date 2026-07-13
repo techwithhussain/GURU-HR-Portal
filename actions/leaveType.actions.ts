@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import * as leaveTypeService from "@/services/leaveTypeService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import { requirePermission } from "@/lib/rbac/permissions";
 import { createLeaveTypeSchema, updateLeaveTypeSchema } from "@/lib/validation/leaveType";
@@ -30,7 +31,7 @@ export async function createLeaveTypeAction(input: unknown): Promise<ActionResul
     revalidatePath("/admin/leave");
     return { success: true, data: { leaveTypeId: leaveType.id } };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to create leave type" };
+    return { success: false, error: toUserMessage(err, "Failed to create leave type") };
   }
 }
 
@@ -45,7 +46,7 @@ export async function updateLeaveTypeAction(leaveTypeId: string, input: unknown)
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to update leave type" };
+    return { success: false, error: toUserMessage(err, "Failed to update leave type") };
   }
 }
 
@@ -57,7 +58,7 @@ export async function deactivateLeaveTypeAction(leaveTypeId: string): Promise<Ac
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to deactivate leave type" };
+    return { success: false, error: toUserMessage(err, "Failed to deactivate leave type") };
   }
 }
 
@@ -69,7 +70,7 @@ export async function activateLeaveTypeAction(leaveTypeId: string): Promise<Acti
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to activate leave type" };
+    return { success: false, error: toUserMessage(err, "Failed to activate leave type") };
   }
 }
 
@@ -81,7 +82,7 @@ export async function deleteLeaveTypeAction(leaveTypeId: string): Promise<Action
     revalidatePath("/admin/leave");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to delete leave type" };
+    return { success: false, error: toUserMessage(err, "Failed to delete leave type") };
   }
 }
 

@@ -1,5 +1,6 @@
 import { type NextRequest } from "next/server";
 import { getSessionContext } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { searchEmployees } from "@/services/employeeService";
 import { employeeSearchSchema, type EmployeeSearchInput } from "@/lib/validation/employee";
@@ -100,6 +101,6 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (err) {
-    return new Response(err instanceof Error ? err.message : "Failed to generate export", { status: 403 });
+    return new Response(toUserMessage(err, "Failed to generate export"), { status: 403 });
   }
 }

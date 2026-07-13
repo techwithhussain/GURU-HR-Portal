@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import * as attendanceService from "@/services/attendanceService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import { correctAttendanceSchema, startBreakSchema } from "@/lib/validation/attendance";
 import { updateAttendanceNotesSchema } from "@/lib/validation/report";
@@ -33,7 +34,7 @@ export async function checkInAction(): Promise<ActionResult> {
     revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Check-in failed" };
+    return { success: false, error: toUserMessage(err, "Check-in failed") };
   }
 }
 
@@ -46,7 +47,7 @@ export async function checkOutAction(): Promise<ActionResult> {
     revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Check-out failed" };
+    return { success: false, error: toUserMessage(err, "Check-out failed") };
   }
 }
 
@@ -62,7 +63,7 @@ export async function startBreakAction(input: unknown): Promise<ActionResult> {
     revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to start break" };
+    return { success: false, error: toUserMessage(err, "Failed to start break") };
   }
 }
 
@@ -75,7 +76,7 @@ export async function endBreakAction(): Promise<ActionResult> {
     revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to end break" };
+    return { success: false, error: toUserMessage(err, "Failed to end break") };
   }
 }
 
@@ -93,7 +94,7 @@ export async function correctAttendanceAction(
     revalidatePath("/admin/employees");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to correct attendance" };
+    return { success: false, error: toUserMessage(err, "Failed to correct attendance") };
   }
 }
 
@@ -111,7 +112,7 @@ export async function updateAttendanceNotesAction(
     revalidatePath(`/reports/attendance/${attendanceId}`);
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to save notes" };
+    return { success: false, error: toUserMessage(err, "Failed to save notes") };
   }
 }
 

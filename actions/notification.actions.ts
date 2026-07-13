@@ -2,6 +2,7 @@
 
 import * as notificationService from "@/services/notificationService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 
 export interface ActionResult<T = null> {
   success: boolean;
@@ -25,7 +26,7 @@ export async function markAsReadAction(notificationId: string): Promise<ActionRe
     await notificationService.markAsRead(notificationId, session);
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to mark as read" };
+    return { success: false, error: toUserMessage(err, "Failed to mark as read") };
   }
 }
 
@@ -35,6 +36,6 @@ export async function markAllAsReadAction(): Promise<ActionResult> {
     await notificationService.markAllAsRead(session);
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to mark all as read" };
+    return { success: false, error: toUserMessage(err, "Failed to mark all as read") };
   }
 }

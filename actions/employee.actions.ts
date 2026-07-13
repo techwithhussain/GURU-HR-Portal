@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import * as employeeService from "@/services/employeeService";
 import * as authService from "@/services/authService";
 import { requireSession } from "@/services/sessionService";
+import { toUserMessage } from "@/lib/errors/toUserMessage";
 import { getClientIp } from "@/lib/network/getClientIp";
 import {
   bulkAssignShiftSchema,
@@ -49,7 +50,7 @@ export async function createEmployeeAction(
     revalidatePath("/admin/employees");
     return { tempPassword, employeeCode: parsed.data.employeeCode };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Failed to create employee" };
+    return { error: toUserMessage(err, "Failed to create employee") };
   }
 }
 
@@ -70,7 +71,7 @@ export async function updateEmployeeAction(
     const meta = await requestMeta();
     await employeeService.updateEmployee(employeeId, parsed.data, session, meta);
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Failed to update employee" };
+    return { error: toUserMessage(err, "Failed to update employee") };
   }
 
   revalidatePath("/admin/employees");
@@ -85,7 +86,7 @@ export async function deactivateEmployeeAction(employeeId: string): Promise<{ su
     revalidatePath("/admin/employees");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to deactivate employee" };
+    return { success: false, error: toUserMessage(err, "Failed to deactivate employee") };
   }
 }
 
@@ -97,7 +98,7 @@ export async function activateEmployeeAction(employeeId: string): Promise<{ succ
     revalidatePath("/admin/employees");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to activate employee" };
+    return { success: false, error: toUserMessage(err, "Failed to activate employee") };
   }
 }
 
@@ -109,7 +110,7 @@ export async function deleteEmployeeAction(employeeId: string): Promise<{ succes
     revalidatePath("/admin/employees");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to delete employee" };
+    return { success: false, error: toUserMessage(err, "Failed to delete employee") };
   }
 }
 
@@ -140,7 +141,7 @@ export async function resignEmployeeAction(employeeId: string): Promise<ActionRe
     revalidatePath("/admin/employees");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to mark employee resigned" };
+    return { success: false, error: toUserMessage(err, "Failed to mark employee resigned") };
   }
 }
 
@@ -213,7 +214,7 @@ export async function adminResetPasswordAction(targetUserId: string): Promise<Ac
     const result = await authService.adminResetPassword(targetUserId, session, meta);
     return { success: true, data: result };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to reset password" };
+    return { success: false, error: toUserMessage(err, "Failed to reset password") };
   }
 }
 
@@ -225,7 +226,7 @@ export async function lockAccountAction(targetUserId: string): Promise<ActionRes
     revalidatePath("/admin/employees");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to lock account" };
+    return { success: false, error: toUserMessage(err, "Failed to lock account") };
   }
 }
 
@@ -237,6 +238,6 @@ export async function unlockAccountAction(targetUserId: string): Promise<ActionR
     revalidatePath("/admin/employees");
     return { success: true };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : "Failed to unlock account" };
+    return { success: false, error: toUserMessage(err, "Failed to unlock account") };
   }
 }
