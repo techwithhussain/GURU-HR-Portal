@@ -101,7 +101,7 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
   });
   if (approvedLeaveToday) {
     throw new ConflictError(
-      "You have an approved leave for today. Ask Admin to cancel it first if you need to check in.",
+      "You have an approved leave for today. Ask Admin to cancel it first if you need to log in.",
     );
   }
 
@@ -142,8 +142,8 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
           "LATE_CHECK_IN",
           { attendanceId: attendance.id, lateMinutes },
           {
-            subject: `Late check-in — ${employeeWithManager.fullName}`,
-            text: `${employeeWithManager.fullName} checked in ${lateMinutes} minute(s) late today.`,
+            subject: `Late login — ${employeeWithManager.fullName}`,
+            text: `${employeeWithManager.fullName} logged in ${lateMinutes} minute(s) late today.`,
           },
         );
       }
@@ -171,14 +171,14 @@ export async function checkOut(employeeId: string, actor: SessionContext, meta: 
     include: { shift: true },
   });
   if (!openAttendance || !openAttendance.checkInAt) {
-    throw new ConflictError("No active check-in found");
+    throw new ConflictError("No active login found");
   }
 
   const activeBreak = await prisma.break.findFirst({
     where: { attendanceId: openAttendance.id, endAt: null },
   });
   if (activeBreak) {
-    throw new ConflictError("End your active break before checking out");
+    throw new ConflictError("End your active break before logging out");
   }
 
   const timezone = await getCompanyTimezone();
@@ -228,7 +228,7 @@ async function requireOpenAttendance(employeeId: string) {
     where: { employeeId, checkOutAt: null },
     orderBy: { checkInAt: "desc" },
   });
-  if (!attendance) throw new ConflictError("Check in before managing breaks");
+  if (!attendance) throw new ConflictError("Log in before managing breaks");
   return attendance;
 }
 
@@ -533,8 +533,8 @@ export async function autoCloseStaleAttendance(): Promise<{ closedCount: number 
         "MISSED_CHECKOUT_AUTO_CLOSE",
         { attendanceId: row.id, attendanceDate: row.attendanceDate.toISOString() },
         {
-          subject: `Missed checkout — ${employee.fullName}`,
-          text: `${employee.fullName} did not check out on ${dateStr}. The system auto-closed that day's attendance at shift end.`,
+          subject: `Missed logout — ${employee.fullName}`,
+          text: `${employee.fullName} did not log out on ${dateStr}. The system auto-closed that day's attendance at shift end.`,
         },
       );
     }
@@ -598,7 +598,7 @@ export async function correctAttendance(
 
   const checkInAt = input.checkInAt ?? existing.checkInAt;
   const checkOutAt = input.checkOutAt ?? existing.checkOutAt;
-  if (!checkInAt) throw new ConflictError("A check-in time is required");
+  if (!checkInAt) throw new ConflictError("A login time is required");
 
   const breakAgg = await prisma.break.aggregate({
     where: { attendanceId },

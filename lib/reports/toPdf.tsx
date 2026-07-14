@@ -125,8 +125,8 @@ export async function toEmployeeDetailPdfBuffer(data: EmployeeAttendanceDetail):
             <Field label="Date" value={data.attendance.date} />
             <Field label="Shift Start" value={formatClock(data.attendance.shiftStart)} />
             <Field label="Shift End" value={formatClock(data.attendance.shiftEnd)} />
-            <Field label="Check In" value={formatClock(data.attendance.checkInAt)} />
-            <Field label="Check Out" value={formatClock(data.attendance.checkOutAt)} />
+            <Field label="Login" value={formatClock(data.attendance.checkInAt)} />
+            <Field label="Logout" value={formatClock(data.attendance.checkOutAt)} />
             <Field label="Working Hours" value={minutesLabel(data.attendance.workingMinutes)} />
             <Field label="Break Hours" value={minutesLabel(data.attendance.breakMinutes)} />
             <Field label="Late Minutes" value={String(data.attendance.lateMinutes)} />

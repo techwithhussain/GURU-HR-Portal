@@ -159,7 +159,7 @@ export function ShiftForm({ mode, shift }: { mode: "create" | "edit"; shift?: Sh
           </div>
           {crossesMidnight && (
             <p className="col-span-3 text-xs text-muted-foreground">
-              This shift crosses midnight — attendance for a check-in on day N ends on day N+1.
+              This shift crosses midnight — attendance for a login on day N ends on day N+1.
             </p>
           )}
         </CardContent>

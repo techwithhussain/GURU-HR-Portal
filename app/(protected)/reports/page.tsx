@@ -282,8 +282,8 @@ export default async function ReportsPage({
               <TableHead>Designation</TableHead>
               <TableHead>Shift</TableHead>
               <TableHead>Date</TableHead>
-              <TableHead>Check In</TableHead>
-              <TableHead>Check Out</TableHead>
+              <TableHead>Login</TableHead>
+              <TableHead>Logout</TableHead>
               <TableHead>Working</TableHead>
               <TableHead>Break</TableHead>
               <TableHead>Late</TableHead>

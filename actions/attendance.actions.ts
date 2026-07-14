@@ -34,7 +34,7 @@ export async function checkInAction(): Promise<ActionResult> {
     revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {
-    return { success: false, error: toUserMessage(err, "Check-in failed") };
+    return { success: false, error: toUserMessage(err, "Login failed") };
   }
 }
 
@@ -47,7 +47,7 @@ export async function checkOutAction(): Promise<ActionResult> {
     revalidatePath("/dashboard");
     return { success: true };
   } catch (err) {
-    return { success: false, error: toUserMessage(err, "Check-out failed") };
+    return { success: false, error: toUserMessage(err, "Logout failed") };
   }
 }
 

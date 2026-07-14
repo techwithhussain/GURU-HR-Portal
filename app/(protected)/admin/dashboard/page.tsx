@@ -11,7 +11,7 @@ const STAT_TILES = [
   { key: "lateToday", label: "Late Today" },
   { key: "onBreakNow", label: "On Break" },
   { key: "workingNow", label: "Working Now" },
-  { key: "checkedOutToday", label: "Checked Out" },
+  { key: "checkedOutToday", label: "Logged Out" },
   { key: "absentToday", label: "Absent Today" },
 ] as const;
 

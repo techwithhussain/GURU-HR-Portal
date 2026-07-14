@@ -180,8 +180,8 @@ export default async function EmployeeAttendanceDetailPage({
         <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
           <Field label="Shift Start" value={formatClock(detail.attendance.shiftStart)} />
           <Field label="Shift End" value={formatClock(detail.attendance.shiftEnd)} />
-          <Field label="Check In" value={formatClock(detail.attendance.checkInAt)} />
-          <Field label="Check Out" value={formatClock(detail.attendance.checkOutAt)} />
+          <Field label="Login" value={formatClock(detail.attendance.checkInAt)} />
+          <Field label="Logout" value={formatClock(detail.attendance.checkOutAt)} />
           <Field label="Working Hours" value={formatMinutes(detail.attendance.workingMinutes)} />
           <Field label="Break Hours" value={formatMinutes(detail.attendance.breakMinutes)} />
           <Field label="Late" value={`${detail.attendance.lateMinutes} min`} />

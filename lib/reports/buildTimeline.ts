@@ -21,7 +21,7 @@ export function buildTimeline(input: {
   const events: TimelineEvent[] = [];
 
   if (input.checkInAt) {
-    events.push({ time: input.checkInAt.toISOString(), label: "Checked In" });
+    events.push({ time: input.checkInAt.toISOString(), label: "Logged In" });
   }
   for (const b of input.breaks) {
     const label = BREAK_TYPE_LABELS[b.type] ?? "Break";
@@ -31,7 +31,7 @@ export function buildTimeline(input: {
     }
   }
   if (input.checkOutAt) {
-    events.push({ time: input.checkOutAt.toISOString(), label: "Checked Out" });
+    events.push({ time: input.checkOutAt.toISOString(), label: "Logged Out" });
   }
 
   return events.sort((a, b) => a.time.localeCompare(b.time));

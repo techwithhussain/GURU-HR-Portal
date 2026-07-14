@@ -103,14 +103,14 @@ function buildTimeline(status: AttendanceStatus): TimelineEntry[] {
 
   const entries: TimelineEntry[] = [];
   if (status.attendance.checkInAt) {
-    entries.push({ label: "Check In", at: new Date(status.attendance.checkInAt), kind: "in" });
+    entries.push({ label: "Login", at: new Date(status.attendance.checkInAt), kind: "in" });
   }
   for (const b of status.attendance.breaks) {
     entries.push({ label: breakLabel(b.type), at: new Date(b.startAt), kind: "break" });
     if (b.endAt) entries.push({ label: "Resume Work", at: new Date(b.endAt), kind: "resume" });
   }
   if (status.attendance.checkOutAt) {
-    entries.push({ label: "Check Out", at: new Date(status.attendance.checkOutAt), kind: "out" });
+    entries.push({ label: "Logout", at: new Date(status.attendance.checkOutAt), kind: "out" });
   }
   return entries.sort((a, b) => a.at.getTime() - b.at.getTime());
 }
@@ -140,7 +140,7 @@ function AttendanceStepper({ status }: { status: AttendanceStatus }) {
 
   const steps: StepInfo[] = [
     {
-      label: "Check In",
+      label: "Login",
       icon: LogIn,
       state: checkInDone ? "done" : "pending",
       time: checkInDone ? fmtTime(new Date(status.attendance.checkInAt!)) : undefined,
@@ -156,7 +156,7 @@ function AttendanceStepper({ status }: { status: AttendanceStatus }) {
           : undefined,
     },
     {
-      label: "Check Out",
+      label: "Logout",
       icon: LogOut,
       state: checkedOut ? "done" : "pending",
       time: checkedOut ? fmtTime(new Date(status.attendance.checkOutAt!)) : undefined,
@@ -186,7 +186,7 @@ function AttendanceStepper({ status }: { status: AttendanceStatus }) {
 }
 
 function StatusBadge({ status }: { status: AttendanceStatus }) {
-  if (status.state === "NOT_CHECKED_IN") return <Badge variant="outline">Not checked in</Badge>;
+  if (status.state === "NOT_CHECKED_IN") return <Badge variant="outline">Not logged in</Badge>;
   if (status.state === "CHECKED_IN")
     return (
       <Badge className="gap-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
@@ -199,7 +199,7 @@ function StatusBadge({ status }: { status: AttendanceStatus }) {
         <span className="size-1.5 rounded-full bg-orange-500" /> On {breakLabel(status.activeBreak.type)}
       </Badge>
     );
-  return <Badge variant="outline">Checked out</Badge>;
+  return <Badge variant="outline">Logged out</Badge>;
 }
 
 function InfoRow({
@@ -336,7 +336,7 @@ export function CheckInPanel({
                   className="rounded-xl bg-emerald-600 px-5 shadow-soft shadow-emerald-600/20 hover:bg-emerald-700"
                 >
                   {pendingAction === "checkIn" ? <Loader2 className="animate-spin" /> : <LogIn />}
-                  {pendingAction === "checkIn" ? "Checking in…" : "Check In"}
+                  {pendingAction === "checkIn" ? "Logging in…" : "Login"}
                 </Button>
               )}
 
@@ -358,7 +358,7 @@ export function CheckInPanel({
                     className="rounded-xl bg-rose-600 px-5 shadow-soft shadow-rose-600/20 hover:bg-rose-700"
                   >
                     {pendingAction === "checkOut" ? <Loader2 className="animate-spin" /> : <LogOut />}
-                    {pendingAction === "checkOut" ? "Checking out…" : "Check Out"}
+                    {pendingAction === "checkOut" ? "Logging out…" : "Logout"}
                   </Button>
                 </>
               )}
@@ -388,7 +388,7 @@ export function CheckInPanel({
             {status.state !== "NOT_CHECKED_IN" && status.attendance.checkInAt && (
               <InfoRow
                 icon={<LogIn className="size-4" />}
-                label="Check In"
+                label="Login"
                 value={fmtTime(new Date(status.attendance.checkInAt))}
               />
             )}

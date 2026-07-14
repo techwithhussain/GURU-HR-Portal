@@ -338,8 +338,8 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Shift</TableHead>
-                <TableHead>Check In</TableHead>
-                <TableHead>Check Out</TableHead>
+                <TableHead>Login</TableHead>
+                <TableHead>Logout</TableHead>
                 <TableHead>Break</TableHead>
                 <TableHead>Working Hours</TableHead>
                 <TableHead>Status</TableHead>

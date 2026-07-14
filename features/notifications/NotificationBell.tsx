@@ -25,8 +25,8 @@ const TYPE_LABELS: Record<string, string> = {
   LEAVE_APPLIED: "New leave request",
   LEAVE_APPROVED: "Leave approved",
   LEAVE_REJECTED: "Leave rejected",
-  LATE_CHECK_IN: "Late check-in",
-  MISSED_CHECKOUT_AUTO_CLOSE: "Missed checkout",
+  LATE_CHECK_IN: "Late login",
+  MISSED_CHECKOUT_AUTO_CLOSE: "Missed logout",
   ACCOUNT_LOCKED: "Account locked",
   BREAK_LIMIT_EXCEEDED: "Break time exceeded",
 };
