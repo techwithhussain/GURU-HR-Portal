@@ -18,8 +18,11 @@ function initials(name: string): string {
     .join("");
 }
 
-function elapsedLabel(startAt: string, now: Date): string {
-  const seconds = Math.max(0, Math.floor((now.getTime() - new Date(startAt).getTime()) / 1000));
+function elapsedSeconds(startAt: string, now: Date): number {
+  return Math.max(0, Math.floor((now.getTime() - new Date(startAt).getTime()) / 1000));
+}
+
+function elapsedLabel(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
@@ -64,12 +67,14 @@ export function EmployeesOnBreakWidget({ initialData }: { initialData: EmployeeO
         {employees.map((emp) => {
           const option = BREAK_OPTIONS.find((o) => o.type === emp.breakType);
           const Icon = option?.icon ?? Coffee;
+          const seconds = now ? elapsedSeconds(emp.startAt, now) : 0;
+          const isOver = now != null && seconds > (option?.maxMinutes ?? 30) * 60;
           return (
-            <div key={emp.employeeId} className="flex items-center gap-3 rounded-xl px-1 py-2.5">
+            <div key={emp.employeeId} className="flex flex-wrap items-center gap-2 rounded-xl px-1 py-2.5 sm:flex-nowrap sm:gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-orange/10 text-xs font-semibold text-brand-orange">
                 {initials(emp.employeeName)}
               </div>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 basis-full sm:basis-auto">
                 <p className="truncate text-sm font-medium">{emp.employeeName}</p>
                 <p className="truncate text-xs text-muted-foreground">{emp.departmentName ?? "—"}</p>
               </div>
@@ -77,9 +82,19 @@ export function EmployeesOnBreakWidget({ initialData }: { initialData: EmployeeO
                 <Icon className="size-3.5" />
                 {option?.label ?? emp.breakType}
               </div>
-              <span className="w-12 shrink-0 text-right font-mono text-xs font-semibold text-muted-foreground">
-                {now ? elapsedLabel(emp.startAt, now) : "--:--"}
-              </span>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <span
+                  className={`w-12 text-right font-mono text-xs font-semibold ${isOver ? "text-rose-600" : "text-muted-foreground"}`}
+                  title={isOver ? "Over the suggested time for this break" : undefined}
+                >
+                  {now ? elapsedLabel(seconds) : "--:--"}
+                </span>
+                {isOver && (
+                  <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                    OVER
+                  </span>
+                )}
+              </div>
             </div>
           );
         })}

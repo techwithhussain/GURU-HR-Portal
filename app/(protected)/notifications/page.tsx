@@ -17,6 +17,7 @@ const TYPE_LABELS: Record<string, string> = {
   LATE_CHECK_IN: "Late check-in",
   MISSED_CHECKOUT_AUTO_CLOSE: "Missed checkout",
   ACCOUNT_LOCKED: "Account locked",
+  BREAK_LIMIT_EXCEEDED: "Break time exceeded",
 };
 
 export default async function NotificationsPage() {

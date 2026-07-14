@@ -8,15 +8,15 @@ import { useBreakActivity } from "@/lib/hooks/useBreakActivity";
 import { playChime, unlockAudio } from "@/lib/audio/beep";
 import type { EmployeeOnBreak } from "@/services/attendanceService";
 
-const BREAK_META: Record<string, { label: string; icon: typeof Coffee; color: string }> = {
-  LUNCH: { label: "Meal Break", icon: Utensils, color: "bg-orange-500" },
-  WASHROOM: { label: "Bio Break", icon: Droplets, color: "bg-blue-500" },
-  PERSONAL: { label: "Casual Break", icon: Coffee, color: "bg-amber-500" },
-  MEETING: { label: "Super Break", icon: Zap, color: "bg-indigo-500" },
+const BREAK_META: Record<string, { label: string; icon: typeof Coffee; color: string; maxMinutes: number }> = {
+  LUNCH: { label: "Meal Break", icon: Utensils, color: "bg-orange-500", maxMinutes: 30 },
+  WASHROOM: { label: "Bio Break", icon: Droplets, color: "bg-blue-500", maxMinutes: 20 },
+  PERSONAL: { label: "Casual Break", icon: Coffee, color: "bg-amber-500", maxMinutes: 10 },
+  MEETING: { label: "Super Break", icon: Zap, color: "bg-indigo-500", maxMinutes: 60 },
 };
 
 function breakMeta(type: string) {
-  return BREAK_META[type] ?? { label: type, icon: Coffee, color: "bg-slate-500" };
+  return BREAK_META[type] ?? { label: type, icon: Coffee, color: "bg-slate-500", maxMinutes: 30 };
 }
 
 function initials(name: string): string {
@@ -28,7 +28,7 @@ function initials(name: string): string {
     .join("");
 }
 
-function ElapsedClock({ startAt }: { startAt: string | Date }) {
+function ElapsedClock({ startAt, maxMinutes }: { startAt: string | Date; maxMinutes: number }) {
   const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
     setNow(new Date());
@@ -40,9 +40,11 @@ function ElapsedClock({ startAt }: { startAt: string | Date }) {
   const totalSeconds = Math.max(0, Math.floor((now.getTime() - new Date(startAt).getTime()) / 1000));
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
+  const isOver = totalSeconds > maxMinutes * 60;
   return (
-    <span className="font-mono tabular-nums">
+    <span className={`font-mono tabular-nums ${isOver ? "text-rose-400" : ""}`}>
       {m}:{s.toString().padStart(2, "0")}
+      {isOver && <span className="ml-1.5 rounded-full bg-rose-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-rose-300">OVER</span>}
     </span>
   );
 }
@@ -75,7 +77,7 @@ function PersonCard({ person }: { person: EmployeeOnBreak }) {
           <Icon className="size-3.5" /> {meta.label}
         </span>
         <span className="text-lg text-white/70">
-          <ElapsedClock startAt={person.startAt} />
+          <ElapsedClock startAt={person.startAt} maxMinutes={meta.maxMinutes} />
         </span>
       </div>
     </div>

@@ -24,6 +24,16 @@ import { notifyUsers } from "@/services/notificationService";
 // number needs to move.
 const MAX_CONCURRENT_BREAKS = 3;
 
+// Mirrors features/attendance/BreakSelectDialog.tsx's per-type suggested
+// durations — duplicated here (not imported) since that file is a "use
+// client" component and this service is server-only.
+const BREAK_TYPE_MAX_MINUTES: Record<string, number> = {
+  LUNCH: 30,
+  WASHROOM: 20,
+  PERSONAL: 10,
+  MEETING: 60,
+};
+
 export class ConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -334,6 +344,20 @@ export async function endBreak(employeeId: string, actor: SessionContext, meta: 
     userAgent: meta.userAgent,
     metadata: { durationMin },
   });
+
+  const maxMinutes = BREAK_TYPE_MAX_MINUTES[openBreak.type];
+  if (maxMinutes != null && durationMin > maxMinutes) {
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { fullName: true } });
+    const admins = await prisma.user.findMany({
+      where: { role: { name: "ADMIN" }, status: "ACTIVE" },
+      select: { id: true },
+    });
+    await notifyUsers(
+      admins.map((a) => a.id),
+      "BREAK_LIMIT_EXCEEDED",
+      { employeeId, employeeName: employee?.fullName ?? "An employee", type: openBreak.type, durationMin, maxMinutes },
+    );
+  }
 
   return updated;
 }

@@ -6,6 +6,7 @@ export const NOTIFICATION_TYPES = [
   "LATE_CHECK_IN",
   "MISSED_CHECKOUT_AUTO_CLOSE",
   "ACCOUNT_LOCKED",
+  "BREAK_LIMIT_EXCEEDED",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
