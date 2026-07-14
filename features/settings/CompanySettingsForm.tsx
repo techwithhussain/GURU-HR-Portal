@@ -66,6 +66,7 @@ export function CompanySettingsForm({ settings }: { settings: CompanySetting | n
       officeIps,
       officeHours: start && end ? { start, end } : undefined,
       holidayCalendar,
+      maxConcurrentBreaks: Number(formData.get("maxConcurrentBreaks") ?? 3),
     };
 
     setError(null);
@@ -115,6 +116,20 @@ export function CompanySettingsForm({ settings }: { settings: CompanySetting | n
           <Label htmlFor="officeHoursEnd">Office hours end</Label>
           <Input id="officeHoursEnd" name="officeHoursEnd" type="time" defaultValue={officeHours.end} />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="maxConcurrentBreaks">Max employees on break at once</Label>
+        <Input
+          id="maxConcurrentBreaks"
+          name="maxConcurrentBreaks"
+          type="number"
+          min={1}
+          max={100}
+          defaultValue={settings?.maxConcurrentBreaks ?? 3}
+          className="w-32"
+          required
+        />
       </div>
 
       <div className="space-y-2">

@@ -49,6 +49,25 @@ function ElapsedClock({ startAt, maxMinutes }: { startAt: string | Date; maxMinu
   );
 }
 
+function TodayTotal({ completedMinutes, startAt, allowanceMinutes }: { completedMinutes: number; startAt: string | Date; allowanceMinutes: number | null }) {
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (!now) return null;
+  const elapsedMinutes = Math.floor(Math.max(0, (now.getTime() - new Date(startAt).getTime()) / 60_000));
+  const total = completedMinutes + elapsedMinutes;
+  const allowance = allowanceMinutes ?? 60;
+  return (
+    <span className={`text-xs ${total > allowance ? "text-rose-300" : "text-white/50"}`}>
+      {total}/{allowance} min today
+    </span>
+  );
+}
+
 function PersonCard({ person }: { person: EmployeeOnBreak }) {
   const meta = breakMeta(person.type);
   const Icon = meta.icon;
@@ -71,6 +90,11 @@ function PersonCard({ person }: { person: EmployeeOnBreak }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-xl font-semibold text-white">{person.employeeName}</p>
         <p className="truncate text-sm text-white/60">{person.department ?? "—"}</p>
+        <TodayTotal
+          completedMinutes={person.completedBreakMinutesToday}
+          startAt={person.startAt}
+          allowanceMinutes={person.breakAllowanceMinutes}
+        />
       </div>
       <div className="flex flex-col items-end gap-1.5">
         <span className={`flex items-center gap-1.5 rounded-full ${meta.color} px-3 py-1 text-xs font-semibold text-white`}>

@@ -69,6 +69,8 @@ export function EmployeesOnBreakWidget({ initialData }: { initialData: EmployeeO
           const Icon = option?.icon ?? Coffee;
           const seconds = now ? elapsedSeconds(emp.startAt, now) : 0;
           const isOver = now != null && seconds > (option?.maxMinutes ?? 30) * 60;
+          const totalMinutesToday = emp.completedBreakMinutesToday + Math.floor(seconds / 60);
+          const allowance = emp.breakAllowanceMinutes ?? 60;
           return (
             <div key={emp.employeeId} className="flex flex-wrap items-center gap-2 rounded-xl px-1 py-2.5 sm:flex-nowrap sm:gap-3">
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-orange/10 text-xs font-semibold text-brand-orange">
@@ -76,7 +78,9 @@ export function EmployeesOnBreakWidget({ initialData }: { initialData: EmployeeO
               </div>
               <div className="min-w-0 flex-1 basis-full sm:basis-auto">
                 <p className="truncate text-sm font-medium">{emp.employeeName}</p>
-                <p className="truncate text-xs text-muted-foreground">{emp.departmentName ?? "—"}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {emp.departmentName ?? "—"} · {totalMinutesToday}/{allowance} min today
+                </p>
               </div>
               <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${option?.soft ?? "bg-muted text-muted-foreground"}`}>
                 <Icon className="size-3.5" />

@@ -433,15 +433,16 @@ model AuditLog {
 // ---------------------------------------------------------------------------
 
 model CompanySetting {
-  id              String   @id @default(cuid())
-  name            String   @default("Guru Digital Advertising")
-  timezone        String   @default("Asia/Kolkata")
-  officeIps       Json     @default("[]")
-  officeHours     Json?
-  holidayCalendar Json?
-  emailSettings   Json?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  name                String   @default("Guru Digital Advertising")
+  timezone            String   @default("Asia/Kolkata")
+  officeIps           Json     @default("[]")
+  officeHours         Json?
+  holidayCalendar     Json?
+  emailSettings       Json?
+  maxConcurrentBreaks Int      @default(3)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@map("company_settings")
 }

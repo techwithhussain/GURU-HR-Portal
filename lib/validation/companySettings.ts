@@ -28,6 +28,7 @@ export const updateCompanySettingsSchema = z.object({
     .default([]),
   officeHours: officeHoursSchema.optional(),
   holidayCalendar: z.array(holidaySchema).default([]),
+  maxConcurrentBreaks: z.coerce.number().int().min(1).max(100),
 });
 
 export type UpdateCompanySettingsInput = z.infer<typeof updateCompanySettingsSchema>;

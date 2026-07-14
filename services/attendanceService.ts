@@ -19,11 +19,6 @@ import {
 import type { CorrectAttendanceInput } from "@/lib/validation/attendance";
 import { notifyUsers } from "@/services/notificationService";
 
-// Office-wide cap on simultaneous breaks — keeps enough staff on the floor
-// at any moment. Not admin-configurable yet; change this constant if the
-// number needs to move.
-const MAX_CONCURRENT_BREAKS = 3;
-
 // Mirrors features/attendance/BreakSelectDialog.tsx's per-type suggested
 // durations — duplicated here (not imported) since that file is a "use
 // client" component and this service is server-only.
@@ -44,6 +39,12 @@ export class ConflictError extends Error {
 async function getCompanyTimezone(): Promise<string> {
   const settings = await prisma.companySetting.findFirst({ select: { timezone: true } });
   return settings?.timezone ?? "Asia/Kolkata";
+}
+
+/** Office-wide cap on simultaneous breaks — Admin-configurable in Company Settings. */
+async function getMaxConcurrentBreaks(): Promise<number> {
+  const settings = await prisma.companySetting.findFirst({ select: { maxConcurrentBreaks: true } });
+  return settings?.maxConcurrentBreaks ?? 3;
 }
 
 function toShiftTiming(shift: {
@@ -241,6 +242,7 @@ export async function startBreak(
   requirePermission(actor, "attendance.self");
 
   const attendance = await requireOpenAttendance(employeeId);
+  const maxConcurrentBreaks = await getMaxConcurrentBreaks();
 
   // The existing-break / concurrent-cap / daily-allowance checks and the
   // insert all run inside one Serializable transaction, so two simultaneous
@@ -256,9 +258,9 @@ export async function startBreak(
         if (existingOpenBreak) throw new ConflictError("A break is already active");
 
         const activeBreaksCompanyWide = await tx.break.count({ where: { endAt: null } });
-        if (activeBreaksCompanyWide >= MAX_CONCURRENT_BREAKS) {
+        if (activeBreaksCompanyWide >= maxConcurrentBreaks) {
           throw new ConflictError(
-            `Break is full right now (${MAX_CONCURRENT_BREAKS}/${MAX_CONCURRENT_BREAKS} slots taken) — please wait for a colleague to finish their break.`,
+            `Break is full right now (${maxConcurrentBreaks}/${maxConcurrentBreaks} slots taken) — please wait for a colleague to finish their break.`,
           );
         }
 
@@ -383,14 +385,15 @@ export async function getCurrentStatus(employeeId: string) {
 
   const activeBreak = current.breaks.find((b) => !b.endAt);
   if (!current.checkOutAt) {
-    const [shift, activeBreaksCompanyWide] = await Promise.all([
+    const [shift, activeBreaksCompanyWide, maxConcurrentBreaks] = await Promise.all([
       prisma.shift.findUnique({ where: { id: current.shiftId }, select: { breakAllowanceMin: true } }),
       prisma.break.count({ where: { endAt: null } }),
+      getMaxConcurrentBreaks(),
     ]);
     const usedMinutes = current.breaks.reduce((sum, b) => sum + (b.durationMin ?? 0), 0);
     const breakBudget =
       shift?.breakAllowanceMin != null ? { usedMinutes, allowanceMinutes: shift.breakAllowanceMin } : null;
-    const companyBreakSlots = { active: activeBreaksCompanyWide, max: MAX_CONCURRENT_BREAKS };
+    const companyBreakSlots = { active: activeBreaksCompanyWide, max: maxConcurrentBreaks };
 
     if (activeBreak) {
       return { state: "ON_BREAK" as const, attendance: current, activeBreak, breakBudget, companyBreakSlots };
@@ -408,6 +411,10 @@ export interface EmployeeOnBreak {
   employeeName: string;
   department: string | null;
   profileImageUrl: string | null;
+  /** Completed break minutes today (excludes the currently-open break itself). */
+  completedBreakMinutesToday: number;
+  /** The shift's daily break allowance, if one is set. */
+  breakAllowanceMinutes: number | null;
 }
 
 /**
@@ -423,6 +430,8 @@ export async function getEmployeesOnBreak(): Promise<EmployeeOnBreak[]> {
       startAt: true,
       attendance: {
         select: {
+          id: true,
+          shift: { select: { breakAllowanceMin: true } },
           employee: {
             select: {
               id: true,
@@ -437,7 +446,16 @@ export async function getEmployeesOnBreak(): Promise<EmployeeOnBreak[]> {
     orderBy: { startAt: "asc" },
   });
 
-  return breaks.map((b) => ({
+  const totals = await Promise.all(
+    breaks.map((b) =>
+      prisma.break.aggregate({
+        where: { attendanceId: b.attendance.id },
+        _sum: { durationMin: true },
+      }),
+    ),
+  );
+
+  return breaks.map((b, i) => ({
     breakId: b.id,
     type: b.type,
     startAt: b.startAt,
@@ -445,6 +463,8 @@ export async function getEmployeesOnBreak(): Promise<EmployeeOnBreak[]> {
     employeeName: b.attendance.employee.fullName,
     department: b.attendance.employee.department?.name ?? null,
     profileImageUrl: b.attendance.employee.profileImageUrl,
+    completedBreakMinutesToday: totals[i]._sum.durationMin ?? 0,
+    breakAllowanceMinutes: b.attendance.shift?.breakAllowanceMin ?? null,
   }));
 }
 

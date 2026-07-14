@@ -30,6 +30,20 @@ function formatMinutes(minutes: number | null): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+/** Total break minutes used today (out of the shift's daily allowance),
+ * including the currently-running break's live elapsed time if on one. */
+function liveBreakUsedMinutes(status: AttendanceStatus, now: Date | null): number {
+  if (status.state !== "CHECKED_IN" && status.state !== "ON_BREAK") return 0;
+  if (!status.breakBudget) return 0;
+
+  let minutes = status.breakBudget.usedMinutes;
+  if (status.state === "ON_BREAK" && now) {
+    const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - new Date(status.activeBreak.startAt).getTime()) / 1000));
+    minutes += Math.floor(elapsedSeconds / 60);
+  }
+  return minutes;
+}
+
 /** Working time so far today, ticking live and paused while on break — unlike
  * `attendance.workingMinutes`, which is only ever set at checkout. */
 function liveWorkingDuration(status: AttendanceStatus, now: Date | null): string {
@@ -404,6 +418,13 @@ export function CheckInPanel({
                 icon={<TimerIcon className="size-4" />}
                 label="Working Duration"
                 value={liveWorkingDuration(status, now)}
+              />
+            )}
+            {(status.state === "CHECKED_IN" || status.state === "ON_BREAK") && status.breakBudget && (
+              <InfoRow
+                icon={<Coffee className="size-4" />}
+                label="Break Used Today"
+                value={`${liveBreakUsedMinutes(status, now)} / ${status.breakBudget.allowanceMinutes} min`}
               />
             )}
             {shift && (

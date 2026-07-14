@@ -60,6 +60,8 @@ export interface EmployeeOnBreak {
   departmentName: string | null;
   breakType: string;
   startAt: string;
+  completedBreakMinutesToday: number;
+  breakAllowanceMinutes: number | null;
 }
 
 export async function getEmployeesOnBreak(actor: SessionContext): Promise<EmployeeOnBreak[]> {
@@ -75,6 +77,8 @@ export async function getEmployeesOnBreak(actor: SessionContext): Promise<Employ
       startAt: true,
       attendance: {
         select: {
+          id: true,
+          shift: { select: { breakAllowanceMin: true } },
           employee: { select: { id: true, fullName: true, department: { select: { name: true } } } },
         },
       },
@@ -82,12 +86,23 @@ export async function getEmployeesOnBreak(actor: SessionContext): Promise<Employ
     orderBy: { startAt: "asc" },
   });
 
-  return rows.map((row) => ({
+  const totals = await Promise.all(
+    rows.map((row) =>
+      prisma.break.aggregate({
+        where: { attendanceId: row.attendance.id },
+        _sum: { durationMin: true },
+      }),
+    ),
+  );
+
+  return rows.map((row, i) => ({
     employeeId: row.attendance.employee.id,
     employeeName: row.attendance.employee.fullName,
     departmentName: row.attendance.employee.department?.name ?? null,
     breakType: row.type,
     startAt: row.startAt.toISOString(),
+    completedBreakMinutesToday: totals[i]._sum.durationMin ?? 0,
+    breakAllowanceMinutes: row.attendance.shift?.breakAllowanceMin ?? null,
   }));
 }
 
