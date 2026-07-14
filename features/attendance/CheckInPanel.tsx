@@ -30,6 +30,30 @@ function formatMinutes(minutes: number | null): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+/** Working time so far today, ticking live and paused while on break — unlike
+ * `attendance.workingMinutes`, which is only ever set at checkout. */
+function liveWorkingDuration(status: AttendanceStatus, now: Date | null): string {
+  if (status.state === "NOT_CHECKED_IN") return "—";
+  if (status.state === "CHECKED_OUT") return formatMinutes(status.attendance.workingMinutes);
+  if (!now || !status.attendance.checkInAt) return "—";
+
+  const checkInAt = new Date(status.attendance.checkInAt);
+  const completedBreakSeconds = status.attendance.breaks
+    .filter((b) => b.endAt)
+    .reduce((sum, b) => sum + (b.durationMin ?? 0) * 60, 0);
+
+  // While on break, freeze the counter at the moment the break started —
+  // it resumes ticking once "Resume Work" is pressed.
+  const upTo = status.state === "ON_BREAK" ? new Date(status.activeBreak.startAt) : now;
+  const elapsedSeconds = Math.max(0, Math.floor((upTo.getTime() - checkInAt.getTime()) / 1000));
+  const workingSeconds = Math.max(0, elapsedSeconds - completedBreakSeconds);
+
+  const h = Math.floor(workingSeconds / 3600);
+  const m = Math.floor((workingSeconds % 3600) / 60);
+  const s = workingSeconds % 60;
+  return `${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`;
+}
+
 function formatTimeOfDay(minutesOfDay: number): string {
   const h24 = Math.floor(minutesOfDay / 60) % 24;
   const m = minutesOfDay % 60;
@@ -379,7 +403,7 @@ export function CheckInPanel({
               <InfoRow
                 icon={<TimerIcon className="size-4" />}
                 label="Working Duration"
-                value={formatMinutes(status.attendance.workingMinutes)}
+                value={liveWorkingDuration(status, now)}
               />
             )}
             {shift && (
