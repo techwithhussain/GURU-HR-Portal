@@ -27,16 +27,17 @@ function employeeFilter(
   return {};
 }
 
-async function getCompanyTimezone(): Promise<string> {
+export async function getCompanyTimezone(): Promise<string> {
   const settings = await prisma.companySetting.findFirst({ select: { timezone: true } });
   return settings?.timezone ?? "Asia/Kolkata";
 }
 
-/** 12-hour local clock time for report exports (e.g. "11:47 PM") — raw ISO
- * strings were previously exported as-is, overflowing fixed-width PDF cells. */
-function formatClockLabel(date: Date | null, timezone: string): string {
-  if (!date) return "";
-  return DateTime.fromJSDate(date, { zone: "utc" }).setZone(timezone).toFormat("h:mm a");
+/** 12-hour local clock time for report exports (e.g. "11:47 PM") — the live
+ * Reports page formats checkInAt/checkOutAt itself client-side, so this is
+ * only used by the CSV/Excel/PDF export routes, which have no such step. */
+export function formatClockLabel(iso: string, timezone: string): string {
+  if (!iso) return "";
+  return DateTime.fromISO(iso, { zone: "utc" }).setZone(timezone).toFormat("h:mm a");
 }
 
 export interface AttendanceReportRow {
@@ -61,10 +62,7 @@ export async function getAttendanceReport(
   filters: ReportFilters,
   actor: SessionContext,
 ): Promise<AttendanceReportRow[]> {
-  const [visibleEmployeeIds, timezone] = await Promise.all([
-    resolveVisibleEmployeeIds(actor),
-    getCompanyTimezone(),
-  ]);
+  const visibleEmployeeIds = await resolveVisibleEmployeeIds(actor);
 
   const rows = await prisma.attendance.findMany({
     where: {
@@ -113,8 +111,8 @@ export async function getAttendanceReport(
     shiftName: row.shift.name,
     date: row.attendanceDate.toISOString().slice(0, 10),
     status: row.status,
-    checkInAt: formatClockLabel(row.checkInAt, timezone),
-    checkOutAt: formatClockLabel(row.checkOutAt, timezone),
+    checkInAt: row.checkInAt ? row.checkInAt.toISOString() : "",
+    checkOutAt: row.checkOutAt ? row.checkOutAt.toISOString() : "",
     workingMinutes: row.workingMinutes,
     breakMinutes: row.breakMinutes,
     lateMinutes: row.lateMinutes,

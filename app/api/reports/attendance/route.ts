@@ -1,7 +1,7 @@
 import { type NextRequest } from "next/server";
 import { getSessionContext } from "@/services/sessionService";
 import { toUserMessage } from "@/lib/errors/toUserMessage";
-import { getAttendanceReport } from "@/services/reportsService";
+import { getAttendanceReport, getCompanyTimezone, formatClockLabel } from "@/services/reportsService";
 import { reportFiltersSchema, reportFormatSchema } from "@/lib/validation/report";
 import { toCsv, type ReportColumn } from "@/lib/reports/toCsv";
 import { toExcelBuffer } from "@/lib/reports/toExcel";
@@ -36,7 +36,17 @@ export async function GET(request: NextRequest) {
   const format = reportFormatSchema.parse(params.format);
 
   try {
-    const rows = await getAttendanceReport(parsed.data, session);
+    const [rawRows, timezone] = await Promise.all([
+      getAttendanceReport(parsed.data, session),
+      getCompanyTimezone(),
+    ]);
+    // Only the exports need a printable clock string — the live Reports page
+    // formats checkInAt/checkOutAt itself from the raw ISO value.
+    const rows = rawRows.map((row) => ({
+      ...row,
+      checkInAt: formatClockLabel(row.checkInAt, timezone),
+      checkOutAt: formatClockLabel(row.checkOutAt, timezone),
+    }));
 
     if (format === "pdf") {
       const buffer = await toTablePdfBuffer(rows, COLUMNS, "Attendance Summary Report");
