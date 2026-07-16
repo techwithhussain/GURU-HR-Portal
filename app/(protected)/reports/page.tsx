@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { DateTime } from "luxon";
 import { getSessionContext } from "@/services/sessionService";
 import { hasPermission } from "@/lib/rbac/permissions";
-import { getAttendanceReport, getLeaveReport } from "@/services/reportsService";
+import { getAttendanceReport, getLeaveReport, getCompanyTimezone } from "@/services/reportsService";
 import { listDepartments, listDesignations, listEmployees } from "@/services/orgService";
 import { listShifts } from "@/services/shiftService";
 import { listLeaveTypesAction } from "@/actions/leaveType.actions";
@@ -67,9 +68,9 @@ function formatMinutes(min: number | null): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-function formatClock(iso: string): string {
+function formatClock(iso: string, timezone: string): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return DateTime.fromISO(iso).setZone(timezone).toFormat("h:mm a");
 }
 
 const LEAVE_COLUMNS = [
@@ -93,6 +94,8 @@ export default async function ReportsPage({
   const params = await searchParams;
   const session = await getSessionContext();
   if (!session) return null;
+
+  const timezone = await getCompanyTimezone();
 
   const type = params.type === "leave" ? "leave" : "attendance";
   const startDate = params.startDate || firstDayOfMonth();
@@ -315,8 +318,8 @@ export default async function ReportsPage({
                 <TableCell>{row.designation}</TableCell>
                 <TableCell>{row.shiftName}</TableCell>
                 <TableCell>{row.date}</TableCell>
-                <TableCell>{formatClock(row.checkInAt)}</TableCell>
-                <TableCell>{formatClock(row.checkOutAt)}</TableCell>
+                <TableCell>{formatClock(row.checkInAt, timezone)}</TableCell>
+                <TableCell>{formatClock(row.checkOutAt, timezone)}</TableCell>
                 <TableCell>{formatMinutes(row.workingMinutes)}</TableCell>
                 <TableCell>{formatMinutes(row.breakMinutes)}</TableCell>
                 <TableCell>{row.lateMinutes > 0 ? `${row.lateMinutes}m` : "—"}</TableCell>

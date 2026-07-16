@@ -1,6 +1,6 @@
 import "server-only";
 import { createHash, randomBytes } from "crypto";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { env } from "@/lib/env";
 import { generateTempPassword, hashPassword, validatePasswordPolicy, verifyPassword } from "@/lib/password";

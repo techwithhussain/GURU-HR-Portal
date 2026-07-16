@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { closeDb, resetDatabase } from "../setup/testDb";
 import {

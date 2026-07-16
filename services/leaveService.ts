@@ -1,5 +1,5 @@
 import "server-only";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission, hasPermission, ForbiddenError } from "@/lib/rbac/permissions";
 import { recordAudit } from "@/services/auditService";

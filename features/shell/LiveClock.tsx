@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { CalendarDays } from "lucide-react";
 
-export function LiveClock() {
+export function LiveClock({ timezone }: { timezone: string }) {
   const [now, setNow] = useState<Date | null>(null);
 
   useEffect(() => {
@@ -21,10 +21,16 @@ export function LiveClock() {
       </div>
       <div className="flex flex-col items-start leading-tight">
         <span className="text-sm font-semibold tabular-nums">
-          {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          {now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", timeZone: timezone })}
         </span>
         <span className="text-xs text-muted-foreground">
-          {now.toLocaleDateString([], { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+          {now.toLocaleDateString([], {
+            weekday: "long",
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+            timeZone: timezone,
+          })}
         </span>
       </div>
     </div>

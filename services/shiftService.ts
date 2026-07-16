@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@/lib/generated/prisma/client";
+import type { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac/permissions";
 import { recordAudit } from "@/services/auditService";
@@ -16,7 +16,11 @@ export async function listShifts() {
 // shift-management page so a deactivated shift can still be found and
 // reactivated, instead of disappearing from view entirely.
 export async function listAllShiftsForAdmin() {
-  return prisma.shift.findMany({ orderBy: { name: "asc" } });
+  const shifts = await prisma.shift.findMany({
+    orderBy: { name: "asc" },
+    include: { _count: { select: { employees: { where: { deletedAt: null } } } } },
+  });
+  return shifts.map((shift) => ({ ...shift, employeeCount: shift._count.employees }));
 }
 
 export async function getShiftById(shiftId: string) {

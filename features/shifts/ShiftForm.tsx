@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createShiftAction, updateShiftAction } from "@/actions/shift.actions";
-import type { Shift } from "@/lib/generated/prisma/client";
+import type { Shift } from "@/lib/prisma-client/client";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

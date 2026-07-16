@@ -1,4 +1,4 @@
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/prisma-client/client";
 import { ConflictError } from "@/services/attendanceService";
 import { NotFoundError } from "@/services/employeeService";
 import { UnauthorizedError } from "@/services/sessionService";

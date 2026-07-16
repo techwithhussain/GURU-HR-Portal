@@ -9,7 +9,6 @@ import {
   Home,
   LayoutDashboard,
   Plane,
-  Search,
   Settings,
   ShieldCheck,
   User,
@@ -20,11 +19,13 @@ import {
 import { getSessionContext } from "@/services/sessionService";
 import { getUnreadCount } from "@/services/notificationService";
 import { getMyDashboardProfile } from "@/services/dashboardService";
+import { getCompanyTimezone } from "@/services/reportsService";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { BreakAlertListener } from "@/features/notifications/BreakAlertListener";
 import { SidebarNav, type SidebarLink } from "@/features/shell/SidebarNav";
 import { LiveClock } from "@/features/shell/LiveClock";
 import { UserMenu } from "@/features/shell/UserMenu";
+import { GlobalSearch } from "@/features/shell/GlobalSearch";
 
 const EMPLOYEE_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -53,9 +54,10 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   const session = await getSessionContext();
   if (!session) redirect("/login");
 
-  const [unreadCount, profile] = await Promise.all([
+  const [unreadCount, profile, timezone] = await Promise.all([
     getUnreadCount(session),
     session.employeeId ? getMyDashboardProfile(session) : Promise.resolve(null),
+    getCompanyTimezone(),
   ]);
 
   const isAdmin = session.roleName === "ADMIN";
@@ -118,17 +120,9 @@ export default async function ProtectedLayout({ children }: { children: React.Re
 
       <div className="flex min-h-full min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-10 flex items-center justify-between gap-4 border-b border-border/60 bg-white/80 px-6 py-3.5 backdrop-blur-md">
-          <div className="relative w-full max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <input
-              type="search"
-              placeholder="Search anything..."
-              disabled
-              className="w-full rounded-full border border-border/70 bg-muted/40 py-2 pl-9 pr-3 text-sm text-foreground shadow-soft placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed"
-            />
-          </div>
+          <GlobalSearch />
           <div className="flex items-center gap-3">
-            <LiveClock />
+            <LiveClock timezone={timezone} />
             <div className="h-8 w-px bg-border" />
             <NotificationBell initialUnreadCount={unreadCount} />
             <UserMenu fullName={fullName} employeeCode={session.employeeCode} roleName={session.roleName} />

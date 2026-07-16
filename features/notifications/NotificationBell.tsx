@@ -18,21 +18,12 @@ import {
   markAllAsReadAction,
   markAsReadAction,
 } from "@/actions/notification.actions";
+import { notificationTypeLabel } from "@/lib/notifications/format";
 
 type NotificationRow = Awaited<ReturnType<typeof listMyNotificationsAction>>[number];
 
-const TYPE_LABELS: Record<string, string> = {
-  LEAVE_APPLIED: "New leave request",
-  LEAVE_APPROVED: "Leave approved",
-  LEAVE_REJECTED: "Leave rejected",
-  LATE_CHECK_IN: "Late login",
-  MISSED_CHECKOUT_AUTO_CLOSE: "Missed logout",
-  ACCOUNT_LOCKED: "Account locked",
-  BREAK_LIMIT_EXCEEDED: "Break time exceeded",
-};
-
 function describe(n: NotificationRow): string {
-  return TYPE_LABELS[n.type] ?? n.type;
+  return notificationTypeLabel(n.type);
 }
 
 export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: number }) {

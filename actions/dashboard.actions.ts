@@ -27,3 +27,13 @@ export async function getMyAttendanceCalendarAction(year: number, month: number)
   const session = await requireSession();
   return dashboardService.getMyAttendanceCalendar(session, year, month);
 }
+
+export async function getAdminAttendanceCalendarAction(year: number, month: number) {
+  const session = await requireSession();
+  return dashboardService.getAdminAttendanceCalendar(session, year, month);
+}
+
+export async function getShiftBreakdownAction() {
+  const session = await requireSession();
+  return dashboardService.getShiftBreakdown(session);
+}

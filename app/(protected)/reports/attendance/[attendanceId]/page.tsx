@@ -1,7 +1,8 @@
 import Link from "next/link";
+import { DateTime } from "luxon";
 import { ArrowLeft, Briefcase, Calendar, Clock, IdCard, Mail, Phone } from "lucide-react";
 import { getSessionContext } from "@/services/sessionService";
-import { getEmployeeAttendanceDetail } from "@/services/reportsService";
+import { getEmployeeAttendanceDetail, getCompanyTimezone } from "@/services/reportsService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,9 +44,9 @@ function formatMinutes(min: number | null): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-function formatClock(iso: string | null): string {
+function formatClock(iso: string | null, timezone: string): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return DateTime.fromISO(iso).setZone(timezone).toFormat("h:mm a");
 }
 
 function Field({ label, value }: { label: string; value: string }) {
@@ -93,6 +94,8 @@ export default async function EmployeeAttendanceDetailPage({
   const { attendanceId } = await params;
   const session = await getSessionContext();
   if (!session) return null;
+
+  const timezone = await getCompanyTimezone();
 
   let detail;
   try {
@@ -178,10 +181,10 @@ export default async function EmployeeAttendanceDetailPage({
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-6">
-          <Field label="Shift Start" value={formatClock(detail.attendance.shiftStart)} />
-          <Field label="Shift End" value={formatClock(detail.attendance.shiftEnd)} />
-          <Field label="Login" value={formatClock(detail.attendance.checkInAt)} />
-          <Field label="Logout" value={formatClock(detail.attendance.checkOutAt)} />
+          <Field label="Shift Start" value={formatClock(detail.attendance.shiftStart, timezone)} />
+          <Field label="Shift End" value={formatClock(detail.attendance.shiftEnd, timezone)} />
+          <Field label="Login" value={formatClock(detail.attendance.checkInAt, timezone)} />
+          <Field label="Logout" value={formatClock(detail.attendance.checkOutAt, timezone)} />
           <Field label="Working Hours" value={formatMinutes(detail.attendance.workingMinutes)} />
           <Field label="Break Hours" value={formatMinutes(detail.attendance.breakMinutes)} />
           <Field label="Late" value={`${detail.attendance.lateMinutes} min`} />
@@ -218,8 +221,8 @@ export default async function EmployeeAttendanceDetailPage({
                 {detail.breaks.map((b, i) => (
                   <TableRow key={i}>
                     <TableCell className="font-medium">{b.type}</TableCell>
-                    <TableCell>{formatClock(b.startAt)}</TableCell>
-                    <TableCell>{formatClock(b.endAt)}</TableCell>
+                    <TableCell>{formatClock(b.startAt, timezone)}</TableCell>
+                    <TableCell>{formatClock(b.endAt, timezone)}</TableCell>
                     <TableCell>{formatMinutes(b.durationMin)}</TableCell>
                   </TableRow>
                 ))}
@@ -243,7 +246,7 @@ export default async function EmployeeAttendanceDetailPage({
                 <li key={i} className="relative">
                   <span className="absolute -left-[26px] top-0.5 flex size-3 items-center justify-center rounded-full bg-brand-orange ring-4 ring-background" />
                   <p className="text-sm font-medium">{event.label}</p>
-                  <p className="text-xs text-muted-foreground">{formatClock(event.time)}</p>
+                  <p className="text-xs text-muted-foreground">{formatClock(event.time, timezone)}</p>
                 </li>
               ))}
             </ol>

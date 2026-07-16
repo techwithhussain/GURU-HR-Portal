@@ -66,6 +66,7 @@ export default async function ShiftsPage() {
             <TableHead>Break</TableHead>
             <TableHead>Net Hours</TableHead>
             <TableHead>Weekly Off</TableHead>
+            <TableHead>Employees</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-right">Actions</TableHead>
           </TableRow>
@@ -85,6 +86,11 @@ export default async function ShiftsPage() {
                 <TableCell>{shift.breakAllowanceMin != null ? formatDuration(breakMin) : "—"}</TableCell>
                 <TableCell>{formatDuration(netMin)}</TableCell>
                 <TableCell>{formatWeeklyOff(shift.weeklyOff)}</TableCell>
+                <TableCell>
+                  <Link href={`/admin/employees?shiftId=${shift.id}`} className="text-primary hover:underline">
+                    {shift.employeeCount}
+                  </Link>
+                </TableCell>
                 <TableCell>
                   <Badge variant={shift.isActive ? "default" : "secondary"}>
                     {shift.isActive ? "ACTIVE" : "INACTIVE"}
@@ -126,7 +132,7 @@ export default async function ShiftsPage() {
           })}
           {shifts.length === 0 && (
             <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
+              <TableCell colSpan={9} className="text-center text-muted-foreground">
                 No shifts yet.
               </TableCell>
             </TableRow>

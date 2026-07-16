@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getSessionContext } from "@/services/sessionService";
 import { getAttendanceStatusAction } from "@/actions/attendance.actions";
 import { getMyDashboardProfileAction, getMyDashboardStatsAction } from "@/actions/dashboard.actions";
+import { getCompanyTimezone } from "@/services/reportsService";
 import { CheckInPanel } from "@/features/attendance/CheckInPanel";
 import { HeroBanner } from "@/features/dashboard/HeroBanner";
 import { StatCards } from "@/features/dashboard/StatCards";
@@ -15,10 +16,11 @@ export default async function DashboardPage() {
   if (!session) redirect("/login");
   if (session.roleName === "ADMIN") redirect("/admin/dashboard");
 
-  const [status, profile, stats] = await Promise.all([
+  const [status, profile, stats, timezone] = await Promise.all([
     getAttendanceStatusAction(),
     getMyDashboardProfileAction(),
     getMyDashboardStatsAction(),
+    getCompanyTimezone(),
   ]);
 
   return (
@@ -30,7 +32,7 @@ export default async function DashboardPage() {
         shift={profile.shift}
       />
 
-      <CheckInPanel status={status} shift={profile.shift} />
+      <CheckInPanel status={status} shift={profile.shift} timezone={timezone} />
 
       <StatCards stats={stats} />
 

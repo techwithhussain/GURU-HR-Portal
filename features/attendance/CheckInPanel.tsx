@@ -8,6 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   BreakSelectDialog,
   BREAK_TYPE_LABELS,
   BREAK_TYPE_MAX_MINUTES,
@@ -87,13 +95,15 @@ function breakLabel(type: string): string {
 }
 
 // Pinned locale/options so server-rendered and client-hydrated markup match exactly
-// (bare toLocaleTimeString() defaults can differ between Node and the browser).
-function fmtTime(date: Date): string {
+// (bare toLocaleTimeString() defaults can differ between Node and the browser), and
+// timeZone is always the company's, not the viewing device's.
+function fmtTime(date: Date, timezone: string): string {
   return date.toLocaleTimeString("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: true,
+    timeZone: timezone,
   });
 }
 
@@ -146,7 +156,7 @@ const STEP_STYLE: Record<StepState, { circle: string; text: string; line: string
   skipped: { circle: "bg-muted text-muted-foreground ring-4 ring-muted/50", text: "text-muted-foreground line-through decoration-1", line: "bg-border" },
 };
 
-function AttendanceStepper({ status }: { status: AttendanceStatus }) {
+function AttendanceStepper({ status, timezone }: { status: AttendanceStatus; timezone: string }) {
   const checkInDone = status.state !== "NOT_CHECKED_IN";
   const checkedOut = status.state === "CHECKED_OUT";
   const onBreak = status.state === "ON_BREAK";
@@ -157,7 +167,7 @@ function AttendanceStepper({ status }: { status: AttendanceStatus }) {
       label: "Login",
       icon: LogIn,
       state: checkInDone ? "done" : "pending",
-      time: checkInDone ? fmtTime(new Date(status.attendance.checkInAt!)) : undefined,
+      time: checkInDone ? fmtTime(new Date(status.attendance.checkInAt!), timezone) : undefined,
     },
     {
       label: "Break",
@@ -166,14 +176,14 @@ function AttendanceStepper({ status }: { status: AttendanceStatus }) {
       time: onBreak
         ? "In progress"
         : hadBreak && checkedOut
-          ? fmtTime(new Date(status.attendance.breaks[status.attendance.breaks.length - 1].startAt))
+          ? fmtTime(new Date(status.attendance.breaks[status.attendance.breaks.length - 1].startAt), timezone)
           : undefined,
     },
     {
       label: "Logout",
       icon: LogOut,
       state: checkedOut ? "done" : "pending",
-      time: checkedOut ? fmtTime(new Date(status.attendance.checkOutAt!)) : undefined,
+      time: checkedOut ? fmtTime(new Date(status.attendance.checkOutAt!), timezone) : undefined,
     },
   ];
 
@@ -236,7 +246,15 @@ function InfoRow({
   );
 }
 
-function BreakTimerBanner({ activeBreak, now }: { activeBreak: { type: string; startAt: Date }; now: Date | null }) {
+function BreakTimerBanner({
+  activeBreak,
+  now,
+  timezone,
+}: {
+  activeBreak: { type: string; startAt: Date };
+  now: Date | null;
+  timezone: string;
+}) {
   const option = BREAK_OPTIONS.find((o) => o.type === activeBreak.type);
   const Icon = option?.icon ?? Coffee;
   const maxMinutes = BREAK_TYPE_MAX_MINUTES[activeBreak.type] ?? 30;
@@ -251,7 +269,7 @@ function BreakTimerBanner({ activeBreak, now }: { activeBreak: { type: string; s
       </span>
       <div className="flex-1">
         <p className="text-sm font-semibold text-orange-900">{breakLabel(activeBreak.type)} in progress</p>
-        <p className="text-xs text-orange-700/80">Started at {fmtTime(activeBreak.startAt)}</p>
+        <p className="text-xs text-orange-700/80">Started at {fmtTime(activeBreak.startAt, timezone)}</p>
       </div>
       <div className="text-right">
         <p className={`font-mono text-xl font-bold tabular-nums ${isOvertime ? "text-rose-600" : "text-orange-700"}`}>
@@ -268,15 +286,18 @@ function BreakTimerBanner({ activeBreak, now }: { activeBreak: { type: string; s
 export function CheckInPanel({
   status,
   shift,
+  timezone,
 }: {
   status: AttendanceStatus;
   shift?: { name: string; startMinutesOfDay: number; endMinutesOfDay: number } | null;
+  timezone: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [pendingAction, setPendingAction] = useState<"checkIn" | "break" | "checkOut" | "resume" | null>(null);
   const [now, setNow] = useState<Date | null>(null);
   const [breakDialogOpen, setBreakDialogOpen] = useState(false);
+  const [earlyLogoutConfirmOpen, setEarlyLogoutConfirmOpen] = useState(false);
 
   useEffect(() => {
     setNow(new Date());
@@ -303,6 +324,17 @@ export function CheckInPanel({
     run(() => startBreakAction({ type }), "break");
   }
 
+  const shiftEndAt = status.state === "CHECKED_IN" && status.shiftEndAt ? new Date(status.shiftEndAt) : null;
+  const shiftNotOverYet = !!(shiftEndAt && now && now < shiftEndAt);
+
+  function handleLogoutClick() {
+    if (shiftNotOverYet) {
+      setEarlyLogoutConfirmOpen(true);
+      return;
+    }
+    run(checkOutAction, "checkOut");
+  }
+
   const timeline = buildTimeline(status);
   const lastBreak = status.state !== "NOT_CHECKED_IN" ? [...status.attendance.breaks].pop() : undefined;
 
@@ -322,16 +354,27 @@ export function CheckInPanel({
         <StatusBadge status={status} />
       </CardHeader>
       <CardContent className="space-y-7 pt-6">
-        <AttendanceStepper status={status} />
+        <AttendanceStepper status={status} timezone={timezone} />
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_1fr]">
           <div className="space-y-5">
             <div className="rounded-2xl bg-gradient-to-br from-brand-navy to-brand-navy-soft px-6 py-5 text-white shadow-soft">
               <p className="font-mono text-[2.6rem] font-bold leading-none tracking-tight tabular-nums">
-                {now?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) ?? "--:--:--"}
+                {now?.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  timeZone: timezone,
+                }) ?? "--:--:--"}
               </p>
               <p className="mt-2 text-xs text-white/60">
-                {now?.toLocaleDateString([], { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
+                {now?.toLocaleDateString([], {
+                  weekday: "long",
+                  day: "2-digit",
+                  month: "long",
+                  year: "numeric",
+                  timeZone: timezone,
+                })}
               </p>
             </div>
 
@@ -339,6 +382,7 @@ export function CheckInPanel({
               <BreakTimerBanner
                 activeBreak={{ type: status.activeBreak.type, startAt: new Date(status.activeBreak.startAt) }}
                 now={now}
+                timezone={timezone}
               />
             )}
 
@@ -368,7 +412,7 @@ export function CheckInPanel({
                   </Button>
                   <Button
                     disabled={isPending}
-                    onClick={() => run(checkOutAction, "checkOut")}
+                    onClick={handleLogoutClick}
                     className="rounded-xl bg-rose-600 px-5 shadow-soft shadow-rose-600/20 hover:bg-rose-700"
                   >
                     {pendingAction === "checkOut" ? <Loader2 className="animate-spin" /> : <LogOut />}
@@ -403,14 +447,14 @@ export function CheckInPanel({
               <InfoRow
                 icon={<LogIn className="size-4" />}
                 label="Login"
-                value={fmtTime(new Date(status.attendance.checkInAt))}
+                value={fmtTime(new Date(status.attendance.checkInAt), timezone)}
               />
             )}
             {lastBreak && (
               <InfoRow
                 icon={<Coffee className="size-4" />}
                 label="Last Break"
-                value={`${fmtTime(new Date(lastBreak.startAt))}${lastBreak.endAt ? ` - ${fmtTime(new Date(lastBreak.endAt))}` : " (ongoing)"}`}
+                value={`${fmtTime(new Date(lastBreak.startAt), timezone)}${lastBreak.endAt ? ` - ${fmtTime(new Date(lastBreak.endAt), timezone)}` : " (ongoing)"}`}
               />
             )}
             {status.state !== "NOT_CHECKED_IN" && (
@@ -453,7 +497,7 @@ export function CheckInPanel({
                         <Icon className="size-4" />
                       </span>
                       <span className="text-xs font-semibold text-foreground">{entry.label}</span>
-                      <span className="text-[11px] text-muted-foreground">{fmtTime(entry.at)}</span>
+                      <span className="text-[11px] text-muted-foreground">{fmtTime(entry.at, timezone)}</span>
                     </div>
                     {i < timeline.length - 1 && <span className="mb-8 h-0.5 w-8 shrink-0 rounded-full bg-border sm:w-14" />}
                   </div>
@@ -470,6 +514,32 @@ export function CheckInPanel({
         onSelect={handleSelectBreak}
         disabled={isPending}
       />
+
+      <Dialog open={earlyLogoutConfirmOpen} onOpenChange={setEarlyLogoutConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Log out before your shift ends?</DialogTitle>
+            <DialogDescription>
+              Your shift ends at {shiftEndAt ? fmtTime(shiftEndAt, timezone) : "—"}. This will be recorded as an
+              early exit — make sure this isn&apos;t an accidental tap.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEarlyLogoutConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-rose-600 hover:bg-rose-700"
+              onClick={() => {
+                setEarlyLogoutConfirmOpen(false);
+                run(checkOutAction, "checkOut");
+              }}
+            >
+              Log out anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

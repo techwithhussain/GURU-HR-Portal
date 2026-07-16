@@ -1,5 +1,5 @@
 import "server-only";
-import { Prisma } from "@/lib/generated/prisma/client";
+import { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac/permissions";
 import { recordAudit } from "@/services/auditService";
@@ -386,7 +386,7 @@ export async function getCurrentStatus(employeeId: string) {
   const activeBreak = current.breaks.find((b) => !b.endAt);
   if (!current.checkOutAt) {
     const [shift, activeBreaksCompanyWide, maxConcurrentBreaks] = await Promise.all([
-      prisma.shift.findUnique({ where: { id: current.shiftId }, select: { breakAllowanceMin: true } }),
+      prisma.shift.findUnique({ where: { id: current.shiftId } }),
       prisma.break.count({ where: { endAt: null } }),
       getMaxConcurrentBreaks(),
     ]);
@@ -394,11 +394,12 @@ export async function getCurrentStatus(employeeId: string) {
     const breakBudget =
       shift?.breakAllowanceMin != null ? { usedMinutes, allowanceMinutes: shift.breakAllowanceMin } : null;
     const companyBreakSlots = { active: activeBreaksCompanyWide, max: maxConcurrentBreaks };
+    const shiftEndAt = shift ? shiftEndInstant(current.attendanceDate, toShiftTiming(shift), timezone).toJSDate().toISOString() : null;
 
     if (activeBreak) {
-      return { state: "ON_BREAK" as const, attendance: current, activeBreak, breakBudget, companyBreakSlots };
+      return { state: "ON_BREAK" as const, attendance: current, activeBreak, breakBudget, companyBreakSlots, shiftEndAt };
     }
-    return { state: "CHECKED_IN" as const, attendance: current, breakBudget, companyBreakSlots };
+    return { state: "CHECKED_IN" as const, attendance: current, breakBudget, companyBreakSlots, shiftEndAt };
   }
   return { state: "CHECKED_OUT" as const, attendance: current };
 }
@@ -493,73 +494,81 @@ export async function autoCloseStaleAttendance(): Promise<{ closedCount: number 
   for (const row of openRows) {
     if (!row.checkInAt) continue;
 
-    const shiftTiming = toShiftTiming(row.shift);
-    const scheduledEnd = shiftEndInstant(row.attendanceDate, shiftTiming, timezone).toJSDate();
-    if (scheduledEnd.getTime() >= now.getTime()) continue;
+    // One row's failure (e.g. a transient email/SMTP error in the
+    // notification step below) must not abort the whole batch — otherwise
+    // every other employee queued after it in `openRows` silently never gets
+    // auto-closed either, for as long as that one row keeps failing.
+    try {
+      const shiftTiming = toShiftTiming(row.shift);
+      const scheduledEnd = shiftEndInstant(row.attendanceDate, shiftTiming, timezone).toJSDate();
+      if (scheduledEnd.getTime() >= now.getTime()) continue;
 
-    const activeBreak = await prisma.break.findFirst({
-      where: { attendanceId: row.id, endAt: null },
-    });
-    if (activeBreak) {
-      const durationMin = Math.max(
-        0,
-        Math.round((scheduledEnd.getTime() - activeBreak.startAt.getTime()) / 60_000),
-      );
-      await prisma.break.update({
-        where: { id: activeBreak.id },
-        data: { endAt: scheduledEnd, durationMin },
+      const activeBreak = await prisma.break.findFirst({
+        where: { attendanceId: row.id, endAt: null },
       });
-    }
+      if (activeBreak) {
+        const durationMin = Math.max(
+          0,
+          Math.round((scheduledEnd.getTime() - activeBreak.startAt.getTime()) / 60_000),
+        );
+        await prisma.break.update({
+          where: { id: activeBreak.id },
+          data: { endAt: scheduledEnd, durationMin },
+        });
+      }
 
-    const breakAgg = await prisma.break.aggregate({
-      where: { attendanceId: row.id },
-      _sum: { durationMin: true },
-    });
-    const totalBreakMinutes = breakAgg._sum.durationMin ?? 0;
+      const breakAgg = await prisma.break.aggregate({
+        where: { attendanceId: row.id },
+        _sum: { durationMin: true },
+      });
+      const totalBreakMinutes = breakAgg._sum.durationMin ?? 0;
 
-    const workingMinutes = computeWorkingMinutes(row.checkInAt, scheduledEnd, totalBreakMinutes);
-    const overtimeMinutes = computeOvertimeMinutes(workingMinutes, row.attendanceDate, shiftTiming, timezone);
-    const status = determinePunchStatus(row.lateMinutes, workingMinutes, shiftTiming.halfDayThresholdMin);
+      const workingMinutes = computeWorkingMinutes(row.checkInAt, scheduledEnd, totalBreakMinutes);
+      const overtimeMinutes = computeOvertimeMinutes(workingMinutes, row.attendanceDate, shiftTiming, timezone);
+      const status = determinePunchStatus(row.lateMinutes, workingMinutes, shiftTiming.halfDayThresholdMin);
 
-    await prisma.attendance.update({
-      where: { id: row.id },
-      data: {
-        checkOutAt: scheduledEnd,
-        workingMinutes,
-        breakMinutes: totalBreakMinutes,
-        earlyExitMinutes: 0,
-        overtimeMinutes,
-        status,
-        isAutoClosed: true,
-        flaggedForReview: true,
-      },
-    });
-
-    await recordAudit({
-      action: "attendance.auto_closed",
-      targetEntity: "attendance",
-      targetId: row.id,
-      metadata: { attendanceDate: row.attendanceDate.toISOString() },
-    });
-
-    const employee = await prisma.employee.findUnique({
-      where: { id: row.employeeId },
-      select: { fullName: true, userId: true },
-    });
-    if (employee) {
-      const dateStr = row.attendanceDate.toISOString().slice(0, 10);
-      await notifyUsers(
-        [employee.userId, ...adminIds],
-        "MISSED_CHECKOUT_AUTO_CLOSE",
-        { attendanceId: row.id, attendanceDate: row.attendanceDate.toISOString() },
-        {
-          subject: `Missed logout — ${employee.fullName}`,
-          text: `${employee.fullName} did not log out on ${dateStr}. The system auto-closed that day's attendance at shift end.`,
+      await prisma.attendance.update({
+        where: { id: row.id },
+        data: {
+          checkOutAt: scheduledEnd,
+          workingMinutes,
+          breakMinutes: totalBreakMinutes,
+          earlyExitMinutes: 0,
+          overtimeMinutes,
+          status,
+          isAutoClosed: true,
+          flaggedForReview: true,
         },
-      );
-    }
+      });
 
-    closedCount++;
+      await recordAudit({
+        action: "attendance.auto_closed",
+        targetEntity: "attendance",
+        targetId: row.id,
+        metadata: { attendanceDate: row.attendanceDate.toISOString() },
+      });
+
+      const employee = await prisma.employee.findUnique({
+        where: { id: row.employeeId },
+        select: { fullName: true, userId: true },
+      });
+      if (employee) {
+        const dateStr = row.attendanceDate.toISOString().slice(0, 10);
+        await notifyUsers(
+          [employee.userId, ...adminIds],
+          "MISSED_CHECKOUT_AUTO_CLOSE",
+          { attendanceId: row.id, attendanceDate: row.attendanceDate.toISOString() },
+          {
+            subject: `Missed logout — ${employee.fullName}`,
+            text: `${employee.fullName} did not log out on ${dateStr}. The system auto-closed that day's attendance at shift end.`,
+          },
+        );
+      }
+
+      closedCount++;
+    } catch (err) {
+      console.error(`autoCloseStaleAttendance: failed to close attendance ${row.id}`, err);
+    }
   }
 
   return { closedCount };

@@ -1,6 +1,6 @@
 import "server-only";
 import { DateTime } from "luxon";
-import type { Prisma } from "@/lib/generated/prisma/client";
+import type { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac/permissions";
 import { employeeSelect } from "@/lib/rbac/fieldVisibility";
@@ -233,9 +233,19 @@ export async function deleteEmployee(
 
   const employee = await prisma.employee.findUnique({
     where: { id: employeeId },
-    select: { id: true, userId: true, deletedAt: true },
+    select: {
+      id: true,
+      userId: true,
+      deletedAt: true,
+      user: { select: { role: { select: { name: true } } } },
+    },
   });
   if (!employee || employee.deletedAt) throw new NotFoundError("Employee not found");
+
+  // 🔒 Admin accounts can never be deleted — they must be deactivated instead.
+  if (employee.user.role.name === "ADMIN") {
+    throw new Error("Admin accounts cannot be deleted. Deactivate the account instead.");
+  }
 
   await prisma.$transaction([
     prisma.employee.update({

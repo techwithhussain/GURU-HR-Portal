@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
+import { DateTime } from "luxon";
 import {
   ArrowLeft,
   Briefcase,
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 import { getSessionContext } from "@/services/sessionService";
 import { getEmployeeProfileAction } from "@/actions/employee.actions";
+import { getCompanyTimezone } from "@/services/reportsService";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -75,9 +77,9 @@ function formatDate(date: Date | string): string {
   return new Date(date).toLocaleDateString();
 }
 
-function formatClock(iso: string | Date | null): string {
+function formatClock(iso: string | Date | null, timezone: string): string {
   if (!iso) return "—";
-  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return DateTime.fromISO(iso instanceof Date ? iso.toISOString() : iso).setZone(timezone).toFormat("h:mm a");
 }
 
 function formatDateTime(iso: string): string {
@@ -88,6 +90,8 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
   const { id } = await params;
   const session = await getSessionContext();
   if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+
+  const timezone = await getCompanyTimezone();
 
   let profile;
   try {
@@ -350,8 +354,8 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                 <TableRow key={a.id}>
                   <TableCell>{formatDate(a.attendanceDate)}</TableCell>
                   <TableCell>{a.shift?.name ?? "—"}</TableCell>
-                  <TableCell>{formatClock(a.checkInAt)}</TableCell>
-                  <TableCell>{formatClock(a.checkOutAt)}</TableCell>
+                  <TableCell>{formatClock(a.checkInAt, timezone)}</TableCell>
+                  <TableCell>{formatClock(a.checkOutAt, timezone)}</TableCell>
                   <TableCell>{a.breakMinutes != null ? formatMinutes(a.breakMinutes) : "—"}</TableCell>
                   <TableCell>{a.workingMinutes != null ? formatMinutes(a.workingMinutes) : "—"}</TableCell>
                   <TableCell>

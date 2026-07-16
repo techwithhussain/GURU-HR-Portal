@@ -8,6 +8,8 @@ import { useBreakActivity } from "@/lib/hooks/useBreakActivity";
 import { playChime, unlockAudio } from "@/lib/audio/beep";
 import type { EmployeeOnBreak } from "@/services/attendanceService";
 
+const SOUND_ENABLED_KEY = "tvBreakBoard.soundEnabled";
+
 const BREAK_META: Record<string, { label: string; icon: typeof Coffee; color: string; maxMinutes: number }> = {
   LUNCH: { label: "Meal Break", icon: Utensils, color: "bg-orange-500", maxMinutes: 30 },
   WASHROOM: { label: "Bio Break", icon: Droplets, color: "bg-blue-500", maxMinutes: 20 },
@@ -114,7 +116,7 @@ interface Popup {
   person: EmployeeOnBreak;
 }
 
-export function TvBreakBoard() {
+export function TvBreakBoard({ timezone }: { timezone: string }) {
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -125,6 +127,18 @@ export function TvBreakBoard() {
     setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    // Once tapped, remember it — a kiosk TV auto-refreshes/reboots with no
+    // one there to tap again, so re-prompting every time would leave it
+    // silent indefinitely. Read after mount (not as initial state) so the
+    // client's first render matches the server's, avoiding a hydration
+    // mismatch on the overlay.
+    if (localStorage.getItem(SOUND_ENABLED_KEY) === "1") {
+      unlockAudio();
+      setSoundEnabled(true);
+    }
   }, []);
 
   function pushPopup(kind: "start" | "end", person: EmployeeOnBreak) {
@@ -158,6 +172,7 @@ export function TvBreakBoard() {
           type="button"
           onClick={() => {
             unlockAudio();
+            localStorage.setItem(SOUND_ENABLED_KEY, "1");
             setSoundEnabled(true);
           }}
           className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/80 text-center backdrop-blur-sm"
@@ -186,7 +201,7 @@ export function TvBreakBoard() {
 
       <div className="mb-10 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Image src="/logo.png" alt="" width={48} height={48} unoptimized className="size-12 object-contain" />
+          <Image src="/logo.png" alt="" width={200} height={200} unoptimized className="size-24 object-contain" />
           <div>
             <p className="text-2xl font-bold">Guru Digital Advertising</p>
             <p className="text-white/50">Live Break Board</p>
@@ -194,10 +209,21 @@ export function TvBreakBoard() {
         </div>
         <div className="text-right">
           <p className="font-mono text-4xl font-bold tabular-nums">
-            {now?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) ?? "--:--:--"}
+            {now?.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+              timeZone: timezone,
+            }) ?? "--:--:--"}
           </p>
           <p className="text-white/50">
-            {now?.toLocaleDateString([], { weekday: "long", day: "2-digit", month: "long", year: "numeric" }) ?? ""}
+            {now?.toLocaleDateString([], {
+              weekday: "long",
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+              timeZone: timezone,
+            }) ?? ""}
           </p>
         </div>
       </div>

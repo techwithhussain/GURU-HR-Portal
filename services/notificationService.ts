@@ -1,5 +1,5 @@
 import "server-only";
-import type { Prisma } from "@/lib/generated/prisma/client";
+import type { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mailer";
 import { NotFoundError } from "@/services/employeeService";

@@ -1,4 +1,4 @@
-import type { Prisma } from "@/lib/generated/prisma/client";
+import type { Prisma } from "@/lib/prisma-client/client";
 import type { SessionContext } from "@/types/session";
 import { hasPermission } from "@/lib/rbac/permissions";
 

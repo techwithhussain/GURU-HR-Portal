@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { updateCompanySettingsAction } from "@/actions/companySettings.actions";
-import type { CompanySetting } from "@/lib/generated/prisma/client";
+import type { CompanySetting } from "@/lib/prisma-client/client";
 
 function readOfficeIps(value: unknown): string {
   return Array.isArray(value) ? value.join("\n") : "";
