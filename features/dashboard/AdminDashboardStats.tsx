@@ -9,12 +9,8 @@ const REFRESH_INTERVAL_MS = 15000;
 
 const STAT_TILES = [
   { key: "totalEmployees", label: "Total Employees" },
-  { key: "presentToday", label: "Present Today" },
-  { key: "lateToday", label: "Late Today" },
-  { key: "onBreakNow", label: "On Break" },
   { key: "workingNow", label: "Working Now" },
-  { key: "checkedOutToday", label: "Logged Out" },
-  { key: "absentToday", label: "Absent Today" },
+  { key: "onBreakNow", label: "On Break" },
 ] as const;
 
 export function AdminDashboardStats({ initialData }: { initialData: DashboardSummary }) {
@@ -33,7 +29,7 @@ export function AdminDashboardStats({ initialData }: { initialData: DashboardSum
   }, []);
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
       {STAT_TILES.map(({ key, label }) => (
         <Card key={key}>
           <CardHeader>
