@@ -37,3 +37,8 @@ export async function getShiftBreakdownAction() {
   const session = await requireSession();
   return dashboardService.getShiftBreakdown(session);
 }
+
+export async function getEmployeesWorkingAction() {
+  const session = await requireSession();
+  return dashboardService.getEmployeesWorking(session);
+}

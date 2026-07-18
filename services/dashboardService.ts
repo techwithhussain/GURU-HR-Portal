@@ -436,3 +436,46 @@ export async function getMyAttendanceCalendar(
   }
   return days;
 }
+
+export interface EmployeeWorking {
+  employeeId: string;
+  employeeName: string;
+  departmentName: string | null;
+  designationName: string | null;
+  shiftName: string | null;
+  checkInAt: string;
+}
+
+export async function getEmployeesWorking(actor: SessionContext): Promise<EmployeeWorking[]> {
+  requirePermission(actor, "reports.view.all");
+
+  const rows = await prisma.attendance.findMany({
+    where: {
+      checkInAt: { not: null },
+      checkOutAt: null,
+      breaks: { none: { endAt: null } },
+    },
+    select: {
+      checkInAt: true,
+      shift: { select: { name: true } },
+      employee: {
+        select: {
+          id: true,
+          fullName: true,
+          department: { select: { name: true } },
+          designation: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { checkInAt: "asc" },
+  });
+
+  return rows.map((row) => ({
+    employeeId: row.employee.id,
+    employeeName: row.employee.fullName,
+    departmentName: row.employee.department?.name ?? null,
+    designationName: row.employee.designation?.name ?? null,
+    shiftName: row.shift?.name ?? null,
+    checkInAt: row.checkInAt!.toISOString(),
+  }));
+}
