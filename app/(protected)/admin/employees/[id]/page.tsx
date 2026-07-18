@@ -347,6 +347,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                 <TableHead>Break</TableHead>
                 <TableHead>Working Hours</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="text-right">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -361,11 +362,16 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                   <TableCell>
                     <Badge variant="outline">{a.status}</Badge>
                   </TableCell>
+                  <TableCell className="text-right">
+                    <Button asChild variant="outline" size="sm">
+                      <Link href={`/reports/attendance/${a.id}`}>View & Correct</Link>
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
               {recentAttendance.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     No attendance records yet.
                   </TableCell>
                 </TableRow>
@@ -374,6 +380,7 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
           </Table>
         </CardContent>
       </Card>
+
 
       {/* Documents */}
       <Card id="documents">

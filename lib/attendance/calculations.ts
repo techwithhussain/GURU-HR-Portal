@@ -14,18 +14,51 @@ export function isNightShift(shift: Pick<ShiftTiming, "startMinutesOfDay" | "end
 }
 
 /**
- * The attendance day a punch belongs to is always the check-in's own local
- * calendar date — this is what keeps a night shift's hours attributed to the
- * day it started, since check-out (after midnight) never changes it.
+ * The attendance day a punch belongs to.
+ *
+ * For **day shifts** this is simply the check-in's own local calendar date.
+ *
+ * For **night shifts** (shift end <= shift start, e.g. 8:30 PM – 6:00 AM) the
+ * same calendar date is used when the employee clocks in during the PM portion.
+ * However, if the employee clocks in during the early-morning portion — after
+ * midnight but still before the shift ends — the attendance date must be the
+ * *previous* calendar day (the day the shift actually started), otherwise:
+ *
+ *   • `shiftEndInstant` is computed against the wrong base date and fires
+ *     24 hours too late (next-day 6 AM instead of this-morning 6 AM).
+ *   • `computeLateMinutes` returns 0 because (1 AM) − (8:30 PM tomorrow) < 0.
+ *   • `autoCloseStaleAttendance` misses the record for a full extra day.
+ *
+ * When `shift` is omitted the function falls back to the plain calendar-date
+ * behaviour (used by dashboard/reporting callers that only need a date bucket
+ * and don't have shift context).
  */
-export function attendanceDateForCheckIn(checkInAt: Date, timezone: string): Date {
+export function attendanceDateForCheckIn(
+  checkInAt: Date,
+  timezone: string,
+  shift?: Pick<ShiftTiming, "startMinutesOfDay" | "endMinutesOfDay">,
+): Date {
   const local = DateTime.fromJSDate(checkInAt, { zone: "utc" }).setZone(timezone);
+
+  if (shift && isNightShift(shift)) {
+    // Minutes elapsed since local midnight for the check-in instant.
+    const minutesOfDay = local.hour * 60 + local.minute;
+    // If we're in the early-morning "tail" of the night shift (i.e. after
+    // midnight but before the scheduled end), this punch belongs to
+    // yesterday's shift date — subtract one calendar day.
+    if (minutesOfDay < shift.endMinutesOfDay) {
+      const yesterday = local.minus({ days: 1 });
+      return DateTime.utc(yesterday.year, yesterday.month, yesterday.day).toJSDate();
+    }
+  }
+
   // Store the local calendar date's own numbers as UTC midnight — never convert
   // the local-midnight *instant* to UTC, since for positive offsets (e.g.
   // Asia/Kolkata) that instant falls on the previous UTC calendar day, which
   // would silently truncate into the wrong date once written to a @db.Date column.
   return DateTime.utc(local.year, local.month, local.day).toJSDate();
 }
+
 
 function shiftBoundaryInstant(
   attendanceDate: Date,

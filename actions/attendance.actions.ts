@@ -121,3 +121,16 @@ export async function getAttendanceStatusAction() {
   const employeeId = requireEmployeeId(session);
   return attendanceService.getCurrentStatus(employeeId);
 }
+
+export async function deleteBreakAction(breakId: string, attendanceId: string): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    await attendanceService.deleteBreak(breakId, session);
+    revalidatePath(`/reports/attendance/${attendanceId}`);
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toUserMessage(err, "Failed to delete break") };
+  }
+}
+

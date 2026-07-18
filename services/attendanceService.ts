@@ -1,4 +1,5 @@
 import "server-only";
+import { DateTime } from "luxon";
 import { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/rbac/permissions";
@@ -14,6 +15,7 @@ import {
   computeWorkingMinutes,
   determinePunchStatus,
   shiftEndInstant,
+  shiftStartInstant,
   type ShiftTiming,
 } from "@/lib/attendance/calculations";
 import type { CorrectAttendanceInput } from "@/lib/validation/attendance";
@@ -85,14 +87,40 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
   const employee = await requireEmployeeWithShift(employeeId);
   const timezone = await getCompanyTimezone();
   const now = new Date();
-  const attendanceDate = attendanceDateForCheckIn(now, timezone);
   const shiftTiming = toShiftTiming(employee.shift);
+  // Pass shiftTiming so that night-shift late logins (after midnight but
+  // before shift end) are correctly attributed to the previous calendar day
+  // — the day the shift actually started — rather than the current date.
+  const attendanceDate = attendanceDateForCheckIn(now, timezone, shiftTiming);
 
-  // Status at check-in only reflects lateness — HALF_DAY is only meaningful
-  // once working minutes are known at checkout, so determinePunchStatus (which
-  // would spuriously read 0 worked minutes as HALF_DAY) isn't used here.
-  const lateMinutes = computeLateMinutes(now, attendanceDate, shiftTiming, timezone);
+  // ── Shift-window guard ───────────────────────────────────────────────────
+  // Each employee has exactly one shift per day. Block login if the shift
+  // window is not currently active:
+  //   • Too early  → shift hasn't started yet (beyond the early-entry buffer)
+  //   • Too late   → shift has already ended for this attendance date
+  //
+  // We allow EARLY_ENTRY_BUFFER_MIN minutes of early entry so employees can
+  // tap in just before their shift starts without getting an error.
+  const EARLY_ENTRY_BUFFER_MIN = 60;
+  const shiftStart = shiftStartInstant(attendanceDate, shiftTiming, timezone);
+  const shiftEnd = shiftEndInstant(attendanceDate, shiftTiming, timezone);
+  const nowDt = DateTime.fromJSDate(now, { zone: "utc" });
 
+  if (nowDt < shiftStart.minus({ minutes: EARLY_ENTRY_BUFFER_MIN })) {
+    const startFmt = shiftStart.setZone(timezone).toFormat("hh:mm a");
+    throw new ConflictError(
+      `Your shift has not started yet. You can log in from ${startFmt} onwards.`,
+    );
+  }
+
+  if (nowDt > shiftEnd) {
+    const endFmt = shiftEnd.setZone(timezone).toFormat("hh:mm a");
+    throw new ConflictError(
+      `Your shift ended at ${endFmt}. You cannot log in again until your next shift starts.`,
+    );
+  }
+
+  // ── Leave guard ──────────────────────────────────────────────────────────
   // An approved leave already owns this calendar day (it pre-creates an
   // ON_LEAVE placeholder row) — block here with a clear message instead of
   // silently falling through to the P2002 branch below, which would return
@@ -105,6 +133,11 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
       "You have an approved leave for today. Ask Admin to cancel it first if you need to log in.",
     );
   }
+
+  // Status at check-in only reflects lateness — HALF_DAY is only meaningful
+  // once working minutes are known at checkout, so determinePunchStatus (which
+  // would spuriously read 0 worked minutes as HALF_DAY) isn't used here.
+  const lateMinutes = computeLateMinutes(now, attendanceDate, shiftTiming, timezone);
 
   try {
     const attendance = await prisma.attendance.create({
@@ -153,11 +186,27 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
     return attendance;
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
-      // Idempotent: a check-in already exists for this employee/day — return it.
       const existing = await prisma.attendance.findUnique({
         where: { employeeId_attendanceDate: { employeeId, attendanceDate } },
       });
-      if (existing) return existing;
+      if (existing) {
+        // The same calendar date already has a completed (checked-out) session.
+        // This is the common night-shift scenario: the employee logged in during
+        // the early-morning portion of yesterday's shift (which maps to today's
+        // calendar date) and already logged out — now they're trying to start a
+        // brand-new session for tonight's shift, but both map to the same
+        // attendanceDate. Surface a clear error so Admin can correct the existing
+        // record (clear its checkOutAt) to allow re-login, rather than silently
+        // returning the stale closed record and leaving the UI stuck.
+        if (existing.checkOutAt !== null) {
+          throw new ConflictError(
+            "An attendance record for today already exists and is closed. " +
+            "For night shift re-login, ask Admin to correct today's attendance record (clear the logout time) so you can log in again.",
+          );
+        }
+        // Still open (no checkout yet) — idempotent, return the open record.
+        return existing;
+      }
     }
     throw err;
   }
@@ -369,6 +418,11 @@ export async function getCurrentStatus(employeeId: string) {
   const today = attendanceDateForCheckIn(new Date(), timezone);
 
   const [openAttendance, todayAttendance] = await Promise.all([
+    // openAttendance is NOT scoped to today's date — a night-shift employee
+    // (e.g. 9 PM – 6 AM) logs in on Day N, but after midnight the calendar
+    // rolls to Day N+1. If we only looked at attendanceDate = today (N+1)
+    // we'd find nothing and incorrectly show NOT_CHECKED_IN while they're
+    // still mid-shift.
     prisma.attendance.findFirst({
       where: { employeeId, checkOutAt: null },
       orderBy: { checkInAt: "desc" },
@@ -380,6 +434,10 @@ export async function getCurrentStatus(employeeId: string) {
     }),
   ]);
 
+  // Prefer an open session (any date) over a completed today-record.
+  // This is the key night-shift fix: if the employee is still logged in from
+  // a shift that started yesterday, openAttendance wins and the dashboard
+  // correctly shows CHECKED_IN / ON_BREAK rather than CHECKED_OUT.
   const current = openAttendance ?? todayAttendance;
   if (!current) return { state: "NOT_CHECKED_IN" as const };
 
@@ -625,8 +683,8 @@ export async function correctAttendance(
   const timezone = await getCompanyTimezone();
   const shiftTiming = toShiftTiming(existing.shift);
 
-  const checkInAt = input.checkInAt ?? existing.checkInAt;
-  const checkOutAt = input.checkOutAt ?? existing.checkOutAt;
+  const checkInAt = input.checkInAt !== undefined ? input.checkInAt : existing.checkInAt;
+  const checkOutAt = input.checkOutAt !== undefined ? input.checkOutAt : existing.checkOutAt;
   if (!checkInAt) throw new ConflictError("A login time is required");
 
   const breakAgg = await prisma.break.aggregate({
@@ -699,3 +757,72 @@ export async function correctAttendance(
 
   return updated;
 }
+
+export async function deleteBreak(breakId: string, actor: SessionContext) {
+  requirePermission(actor, "attendance.correct");
+
+  const brk = await prisma.break.findUnique({
+    where: { id: breakId },
+    include: { attendance: { include: { shift: true } } },
+  });
+  if (!brk) throw new NotFoundError("Break record not found");
+
+  const attendance = brk.attendance;
+  const attendanceId = brk.attendanceId;
+
+  // Delete the break
+  await prisma.break.delete({
+    where: { id: breakId },
+  });
+
+  // Recalculate breakMinutes
+  const breakAgg = await prisma.break.aggregate({
+    where: { attendanceId },
+    _sum: { durationMin: true },
+  });
+  const totalBreakMinutes = breakAgg._sum.durationMin ?? 0;
+
+  const timezone = await getCompanyTimezone();
+  const shiftTiming = toShiftTiming(attendance.shift);
+
+  const checkInAt = attendance.checkInAt;
+  const checkOutAt = attendance.checkOutAt;
+
+  if (checkInAt) {
+    const lateMinutes = computeLateMinutes(checkInAt, attendance.attendanceDate, shiftTiming, timezone);
+    const workingMinutes = checkOutAt
+      ? computeWorkingMinutes(checkInAt, checkOutAt, totalBreakMinutes)
+      : null;
+    const earlyExitMinutes = checkOutAt
+      ? computeEarlyExitMinutes(checkOutAt, attendance.attendanceDate, shiftTiming, timezone)
+      : 0;
+    const overtimeMinutes =
+      workingMinutes !== null
+        ? computeOvertimeMinutes(workingMinutes, attendance.attendanceDate, shiftTiming, timezone)
+        : 0;
+    const status =
+      workingMinutes !== null
+        ? determinePunchStatus(lateMinutes, workingMinutes, shiftTiming.halfDayThresholdMin)
+        : attendance.status;
+
+    await prisma.attendance.update({
+      where: { id: attendanceId },
+      data: {
+        breakMinutes: totalBreakMinutes,
+        workingMinutes,
+        lateMinutes,
+        earlyExitMinutes,
+        overtimeMinutes,
+        status,
+      },
+    });
+  } else {
+    await prisma.attendance.update({
+      where: { id: attendanceId },
+      data: {
+        breakMinutes: totalBreakMinutes,
+      },
+    });
+  }
+}
+

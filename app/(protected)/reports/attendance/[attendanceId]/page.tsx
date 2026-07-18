@@ -3,6 +3,7 @@ import { DateTime } from "luxon";
 import { ArrowLeft, Briefcase, Calendar, Clock, IdCard, Mail, Phone } from "lucide-react";
 import { getSessionContext } from "@/services/sessionService";
 import { getEmployeeAttendanceDetail, getCompanyTimezone } from "@/services/reportsService";
+import { hasPermission } from "@/lib/rbac/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { AdminNotesEditor } from "@/features/reports/AdminNotesEditor";
 import { PrintButton } from "@/features/reports/PrintButton";
+import { CorrectAttendanceDialog } from "@/features/reports/CorrectAttendanceDialog";
 
 const STATUS_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   PRESENT: "default",
@@ -115,6 +117,8 @@ export default async function EmployeeAttendanceDetailPage({
 
   const exportBase = `/api/reports/attendance/${attendanceId}`;
 
+  const canCorrect = hasPermission(session, "attendance.correct");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between print:hidden">
@@ -122,6 +126,13 @@ export default async function EmployeeAttendanceDetailPage({
           <ArrowLeft className="size-4" /> Back to Reports
         </Link>
         <div className="flex gap-2">
+          {canCorrect && (
+            <CorrectAttendanceDialog
+              attendanceId={attendanceId}
+              currentCheckIn={detail.attendance.checkInAt}
+              currentCheckOut={detail.attendance.checkOutAt}
+            />
+          )}
           <Button asChild variant="outline" size="sm">
             <a href={`${exportBase}?format=xlsx`}>Export Excel</a>
           </Button>
