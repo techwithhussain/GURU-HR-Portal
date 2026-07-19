@@ -7,6 +7,7 @@ import {
   getEmployeesWorkingAction,
   getShiftBreakdownAction,
 } from "@/actions/dashboard.actions";
+import { getCompanyTimezone } from "@/services/reportsService";
 import { EmployeesOnBreakWidget } from "@/features/dashboard/EmployeesOnBreakWidget";
 import { EmployeesWorkingWidget } from "@/features/dashboard/EmployeesWorkingWidget";
 import { AdminDashboardStats } from "@/features/dashboard/AdminDashboardStats";
@@ -17,11 +18,12 @@ export default async function AdminDashboardPage() {
   const session = await getSessionContext();
   if (!session || !hasPermission(session, "reports.view.all")) redirect("/dashboard");
 
-  const [summary, employeesOnBreak, employeesWorking, shiftBreakdown] = await Promise.all([
+  const [summary, employeesOnBreak, employeesWorking, shiftBreakdown, timezone] = await Promise.all([
     getDashboardSummaryAction(),
     getEmployeesOnBreakAction(),
     getEmployeesWorkingAction(),
     getShiftBreakdownAction(),
+    getCompanyTimezone(),
   ]);
 
   return (
@@ -30,7 +32,7 @@ export default async function AdminDashboardPage() {
       <AdminDashboardStats initialData={summary} />
       <ShiftBreakdownTable initialData={shiftBreakdown} />
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <EmployeesWorkingWidget initialData={employeesWorking} />
+        <EmployeesWorkingWidget initialData={employeesWorking} timezone={timezone} />
         <EmployeesOnBreakWidget initialData={employeesOnBreak} />
       </div>
       <AdminAttendanceCalendar />

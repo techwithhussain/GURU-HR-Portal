@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Coffee, LogIn, LogOut, Loader2, Pause, Play, Timer as TimerIcon, Clock3, Sunrise } from "lucide-react";
+import { useServerTime } from "@/hooks/useServerTime";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -295,15 +296,10 @@ export function CheckInPanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [pendingAction, setPendingAction] = useState<"checkIn" | "break" | "checkOut" | "resume" | null>(null);
-  const [now, setNow] = useState<Date | null>(null);
+  // Server-synced clock — unaffected by the employee's system clock settings.
+  const now = useServerTime();
   const [breakDialogOpen, setBreakDialogOpen] = useState(false);
   const [earlyLogoutConfirmOpen, setEarlyLogoutConfirmOpen] = useState(false);
-
-  useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   function run(action: () => Promise<ActionResult>, actionName: typeof pendingAction) {
     setPendingAction(actionName);

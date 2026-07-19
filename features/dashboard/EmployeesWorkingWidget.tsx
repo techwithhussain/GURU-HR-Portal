@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Laptop, Clock } from "lucide-react";
+import { Laptop, Clock, LogIn } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getEmployeesWorkingAction } from "@/actions/dashboard.actions";
 import type { EmployeeWorking } from "@/services/dashboardService";
+import { useServerTime } from "@/hooks/useServerTime";
 
 const REFRESH_INTERVAL_MS = 8000;
 
@@ -30,15 +31,26 @@ function elapsedLabel(seconds: number): string {
   return `${m}m`;
 }
 
-export function EmployeesWorkingWidget({ initialData }: { initialData: EmployeeWorking[] }) {
-  const [employees, setEmployees] = useState<EmployeeWorking[]>(initialData);
-  const [now, setNow] = useState<Date | null>(null);
+/** Formats a UTC ISO timestamp as a time string in the company's timezone (IST). */
+function fmtLoginTime(iso: string, timezone: string): string {
+  return new Date(iso).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: timezone,
+  });
+}
 
-  useEffect(() => {
-    setNow(new Date());
-    const tick = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(tick);
-  }, []);
+export function EmployeesWorkingWidget({
+  initialData,
+  timezone,
+}: {
+  initialData: EmployeeWorking[];
+  timezone: string;
+}) {
+  const [employees, setEmployees] = useState<EmployeeWorking[]>(initialData);
+  // Server-synced clock — unaffected by the admin's system clock settings.
+  const now = useServerTime();
 
   useEffect(() => {
     const poll = setInterval(async () => {
@@ -69,7 +81,10 @@ export function EmployeesWorkingWidget({ initialData }: { initialData: EmployeeW
         {employees.map((emp) => {
           const seconds = now ? elapsedSeconds(emp.checkInAt, now) : 0;
           return (
-            <div key={emp.employeeId} className="flex flex-wrap items-center gap-2 rounded-xl px-1 py-2.5 sm:flex-nowrap sm:gap-3">
+            <div
+              key={emp.employeeId}
+              className="flex flex-wrap items-center gap-2 rounded-xl px-1 py-2.5 sm:flex-nowrap sm:gap-3"
+            >
               <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 text-xs font-semibold text-emerald-600">
                 {initials(emp.employeeName)}
               </div>
@@ -85,6 +100,11 @@ export function EmployeesWorkingWidget({ initialData }: { initialData: EmployeeW
                   {emp.shiftName}
                 </div>
               )}
+              {/* Login time in IST — independent of server or browser timezone */}
+              <div className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">
+                <LogIn className="size-3.5" />
+                <span>{fmtLoginTime(emp.checkInAt, timezone)}</span>
+              </div>
               <div className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
                 <Clock className="size-3.5" />
                 <span className="text-right font-mono text-xs font-semibold">

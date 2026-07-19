@@ -826,3 +826,96 @@ export async function deleteBreak(breakId: string, actor: SessionContext) {
   }
 }
 
+export async function toggleWeeklyOff(
+  employeeId: string,
+  dateStr: string,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+) {
+  requirePermission(actor, "attendance.correct");
+
+  const timezone = await getCompanyTimezone();
+  // Ensure we store it as a UTC Date at midnight matching the format of prisma @db.Date
+  const localDate = DateTime.fromISO(dateStr, { zone: timezone }).startOf("day");
+  const date = DateTime.utc(localDate.year, localDate.month, localDate.day).toJSDate();
+
+  const existing = await prisma.attendance.findUnique({
+    where: {
+      employeeId_attendanceDate: {
+        employeeId,
+        attendanceDate: date,
+      },
+    },
+  });
+
+  if (existing) {
+    if (existing.status === "WEEKLY_OFF") {
+      // If it is already marked as weekly off, delete it so it reverts to dynamic absent/default calculation
+      await prisma.attendance.delete({
+        where: { id: existing.id },
+      });
+      await recordAudit({
+        actorUserId: actor.userId,
+        action: "attendance.weekly_off_removed",
+        targetEntity: "attendance",
+        targetId: existing.id,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        metadata: { date: dateStr },
+      });
+    } else {
+      // If it's another status, overwrite it to WEEKLY_OFF and clear check in/out
+      const updated = await prisma.attendance.update({
+        where: { id: existing.id },
+        data: {
+          status: "WEEKLY_OFF",
+          checkInAt: null,
+          checkOutAt: null,
+          workingMinutes: null,
+          breakMinutes: null,
+          lateMinutes: 0,
+          overtimeMinutes: 0,
+          earlyExitMinutes: 0,
+        },
+      });
+      await recordAudit({
+        actorUserId: actor.userId,
+        action: "attendance.marked_weekly_off",
+        targetEntity: "attendance",
+        targetId: updated.id,
+        ip: meta.ip,
+        userAgent: meta.userAgent,
+        metadata: { date: dateStr },
+      });
+    }
+  } else {
+    // Get employee shift
+    const employee = await prisma.employee.findUniqueOrThrow({
+      where: { id: employeeId },
+      select: { shiftId: true },
+    });
+    if (!employee.shiftId) {
+      throw new Error("Employee has no shift assigned");
+    }
+
+    const created = await prisma.attendance.create({
+      data: {
+        employeeId,
+        attendanceDate: date,
+        shiftId: employee.shiftId,
+        status: "WEEKLY_OFF",
+      },
+    });
+
+    await recordAudit({
+      actorUserId: actor.userId,
+      action: "attendance.marked_weekly_off",
+      targetEntity: "attendance",
+      targetId: created.id,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      metadata: { date: dateStr },
+    });
+  }
+}
+

@@ -5,12 +5,13 @@ import { hasPermission } from "@/lib/rbac/permissions";
 import { getAttendanceReport, getLeaveReport, getCompanyTimezone } from "@/services/reportsService";
 import { listDepartments, listDesignations, listEmployees } from "@/services/orgService";
 import { listShifts } from "@/services/shiftService";
-import { listLeaveTypesAction } from "@/actions/leaveType.actions";
+import { listLeaveTypes } from "@/services/leaveTypeService";
 import { reportFiltersSchema } from "@/lib/validation/report";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { ToggleWeeklyOffButton } from "@/features/reports/ToggleWeeklyOffButton";
 import {
   Table,
   TableBody,
@@ -108,7 +109,7 @@ export default async function ReportsPage({
     canFilterAll ? listDepartments() : Promise.resolve([]),
     canFilterAll ? listDesignations() : Promise.resolve([]),
     canFilterAll ? listShifts() : Promise.resolve([]),
-    listLeaveTypesAction(),
+    listLeaveTypes(),
   ]);
 
   const parsedFilters = reportFiltersSchema.safeParse({
@@ -284,7 +285,7 @@ export default async function ReportsPage({
               <TableHead>Department</TableHead>
               <TableHead>Designation</TableHead>
               <TableHead>Shift</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>Login Date</TableHead>
               <TableHead>Login</TableHead>
               <TableHead>Logout</TableHead>
               <TableHead>Working</TableHead>
@@ -292,6 +293,7 @@ export default async function ReportsPage({
               <TableHead>Late</TableHead>
               <TableHead>OT</TableHead>
               <TableHead>Status</TableHead>
+              {canFilterAll && <TableHead className="print:hidden text-right">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -303,7 +305,7 @@ export default async function ReportsPage({
                       {initials(row.employeeName)}
                     </div>
                     <div className="flex flex-col leading-tight">
-                      {canFilterAll ? (
+                      {canFilterAll && !row.attendanceId.startsWith("dynamic_") ? (
                         <Link href={`/reports/attendance/${row.attendanceId}`} className="font-medium hover:underline">
                           {row.employeeName}
                         </Link>
@@ -319,14 +321,36 @@ export default async function ReportsPage({
                 <TableCell>{row.shiftName}</TableCell>
                 <TableCell>{row.date}</TableCell>
                 <TableCell>{formatClock(row.checkInAt, timezone)}</TableCell>
-                <TableCell>{formatClock(row.checkOutAt, timezone)}</TableCell>
+                <TableCell>
+                  <span className="flex items-center gap-1">
+                    {formatClock(row.checkOutAt, timezone)}
+                    {/* Show +1 badge when logout is on the next calendar day (night shift) */}
+                    {row.checkOutAt && row.logoutDate && row.logoutDate !== row.date && (
+                      <span
+                        className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700"
+                        title={`Logout on ${row.logoutDate}`}
+                      >
+                        +1
+                      </span>
+                    )}
+                  </span>
+                </TableCell>
                 <TableCell>{formatMinutes(row.workingMinutes)}</TableCell>
                 <TableCell>{formatMinutes(row.breakMinutes)}</TableCell>
                 <TableCell>{row.lateMinutes > 0 ? `${row.lateMinutes}m` : "—"}</TableCell>
                 <TableCell>{row.overtimeMinutes > 0 ? `${row.overtimeMinutes}m` : "—"}</TableCell>
-                <TableCell>
+                 <TableCell>
                   <Badge variant={STATUS_BADGE_VARIANT[row.status] ?? "outline"}>{row.status}</Badge>
                 </TableCell>
+                {canFilterAll && (
+                  <TableCell className="print:hidden text-right">
+                    <ToggleWeeklyOffButton
+                      employeeId={row.employeeId}
+                      dateStr={row.date}
+                      isWeeklyOff={row.status === "WEEKLY_OFF"}
+                    />
+                  </TableCell>
+                )}
               </TableRow>
             ))}
             {attendanceRows.length === 0 && (

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BREAK_OPTIONS } from "@/features/attendance/BreakSelectDialog";
 import { getEmployeesOnBreakAction } from "@/actions/dashboard.actions";
 import type { EmployeeOnBreak } from "@/services/dashboardService";
+import { useServerTime } from "@/hooks/useServerTime";
 
 const REFRESH_INTERVAL_MS = 8000;
 
@@ -30,13 +31,8 @@ function elapsedLabel(seconds: number): string {
 
 export function EmployeesOnBreakWidget({ initialData }: { initialData: EmployeeOnBreak[] }) {
   const [employees, setEmployees] = useState<EmployeeOnBreak[]>(initialData);
-  const [now, setNow] = useState<Date | null>(null);
-
-  useEffect(() => {
-    setNow(new Date());
-    const tick = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(tick);
-  }, []);
+  // Server-synced clock — unaffected by the admin's system clock settings.
+  const now = useServerTime();
 
   useEffect(() => {
     const poll = setInterval(async () => {

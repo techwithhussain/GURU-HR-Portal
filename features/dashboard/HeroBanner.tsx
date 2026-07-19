@@ -1,8 +1,15 @@
 import Image from "next/image";
 import { Briefcase, Clock, IdCard } from "lucide-react";
 
-function greeting(): string {
-  const hour = new Date().getHours();
+function greeting(timezone: string): string {
+  // Use the company's configured timezone (IST) to determine the greeting,
+  // not the server's local clock which may be running in UTC.
+  const hourStr = new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    hour12: false,
+    timeZone: timezone,
+  }).format(new Date());
+  const hour = parseInt(hourStr, 10);
   if (hour >= 5 && hour < 12) return "Good Morning";
   if (hour >= 12 && hour < 17) return "Good Afternoon";
   if (hour >= 17 && hour < 21) return "Good Evening";
@@ -36,11 +43,13 @@ export function HeroBanner({
   employeeCode,
   departmentName,
   shift,
+  timezone,
 }: {
   fullName: string;
   employeeCode: string;
   departmentName: string | null;
   shift?: { name: string; startMinutesOfDay: number; endMinutesOfDay: number } | null;
+  timezone: string;
 }) {
   const firstName = fullName.split(" ")[0];
 
@@ -55,7 +64,7 @@ export function HeroBanner({
         <div className="max-w-lg space-y-3">
           <div className="space-y-1">
             <h1 className="text-2xl font-bold tracking-tight sm:text-[1.7rem]">
-              {greeting()}, {firstName}! <span className="inline-block">👋</span>
+              {greeting(timezone)}, {firstName}! <span className="inline-block">👋</span>
             </h1>
             <p className="text-xs text-white/80 sm:text-sm">Stay positive, work hard and make it happen.</p>
           </div>

@@ -7,6 +7,7 @@ import { Coffee, Droplets, Utensils, Zap } from "lucide-react";
 import { useBreakActivity } from "@/lib/hooks/useBreakActivity";
 import { playChime, unlockAudio } from "@/lib/audio/beep";
 import type { EmployeeOnBreak } from "@/services/attendanceService";
+import { useServerTime } from "@/hooks/useServerTime";
 
 const SOUND_ENABLED_KEY = "tvBreakBoard.soundEnabled";
 
@@ -31,12 +32,8 @@ function initials(name: string): string {
 }
 
 function ElapsedClock({ startAt, maxMinutes }: { startAt: string | Date; maxMinutes: number }) {
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  // Server-synced clock — unaffected by the TV's system clock settings.
+  const now = useServerTime();
 
   if (!now) return <span>--:--</span>;
   const totalSeconds = Math.max(0, Math.floor((now.getTime() - new Date(startAt).getTime()) / 1000));
@@ -52,12 +49,8 @@ function ElapsedClock({ startAt, maxMinutes }: { startAt: string | Date; maxMinu
 }
 
 function TodayTotal({ completedMinutes, startAt, allowanceMinutes }: { completedMinutes: number; startAt: string | Date; allowanceMinutes: number | null }) {
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  // Server-synced clock — unaffected by the TV's system clock settings.
+  const now = useServerTime();
 
   if (!now) return null;
   const elapsedMinutes = Math.floor(Math.max(0, (now.getTime() - new Date(startAt).getTime()) / 60_000));
@@ -121,13 +114,8 @@ export function TvBreakBoard({ timezone }: { timezone: string }) {
   const token = searchParams.get("token");
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [popups, setPopups] = useState<Popup[]>([]);
-  const [now, setNow] = useState<Date | null>(null);
-
-  useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  // Server-synced clock — unaffected by the TV's system clock settings.
+  const now = useServerTime();
 
   useEffect(() => {
     // Once tapped, remember it — a kiosk TV auto-refreshes/reboots with no

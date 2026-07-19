@@ -7,6 +7,7 @@ import { buildTimeline, type TimelineEvent } from "@/lib/reports/buildTimeline";
 import { parseUserAgent } from "@/lib/reports/parseUserAgent";
 import type { SessionContext } from "@/types/session";
 import type { ReportFilters } from "@/lib/validation/report";
+import { holidaySchema } from "@/lib/validation/companySettings";
 
 async function resolveVisibleEmployeeIds(actor: SessionContext): Promise<string[] | undefined> {
   if (hasPermission(actor, "reports.view.all")) return undefined;
@@ -42,12 +43,18 @@ export function formatClockLabel(iso: string, timezone: string): string {
 
 export interface AttendanceReportRow {
   attendanceId: string;
+  employeeId: string;
   employeeCode: string;
   employeeName: string;
   department: string;
   designation: string;
   shiftName: string;
+  /** Attendance date (= shift-start date). For night shifts this is the date
+   * the shift started, which may differ from the calendar date of the logout. */
   date: string;
+  /** IST date of the actual logout — differs from `date` for night shifts that
+   * cross midnight (e.g. login July 15 PM → logout July 16 AM). */
+  logoutDate: string;
   status: string;
   checkInAt: string;
   checkOutAt: string;
@@ -64,29 +71,39 @@ export async function getAttendanceReport(
 ): Promise<AttendanceReportRow[]> {
   const visibleEmployeeIds = await resolveVisibleEmployeeIds(actor);
 
-  const rows = await prisma.attendance.findMany({
+  // 1. Fetch all matching employees
+  const employees = await prisma.employee.findMany({
     where: {
-      attendanceDate: { gte: filters.startDate, lte: filters.endDate },
-      ...employeeFilter(filters, visibleEmployeeIds),
-      ...(filters.status
-        ? {
-            status: filters.status as
-              | "PRESENT"
-              | "LATE"
-              | "HALF_DAY"
-              | "ABSENT"
-              | "ON_LEAVE"
-              | "HOLIDAY"
-              | "WEEKLY_OFF",
-          }
-        : {}),
+      status: "ACTIVE",
+      deletedAt: null,
+      ...(visibleEmployeeIds
+        ? { id: { in: visibleEmployeeIds } }
+        : filters.employeeId
+          ? { id: filters.employeeId }
+          : {}),
       ...(!visibleEmployeeIds && filters.departmentId
-        ? { employee: { departmentId: filters.departmentId } }
+        ? { departmentId: filters.departmentId }
         : {}),
       ...(!visibleEmployeeIds && filters.designationId
-        ? { employee: { designationId: filters.designationId } }
+        ? { designationId: filters.designationId }
         : {}),
       ...(!visibleEmployeeIds && filters.shiftId ? { shiftId: filters.shiftId } : {}),
+    },
+    include: {
+      shift: true,
+      user: { select: { employeeCode: true } },
+      department: { select: { name: true } },
+      designation: { select: { name: true } },
+    },
+  });
+
+  const employeeIds = employees.map((e) => e.id);
+
+  // 2. Fetch existing attendance rows in the date range for these employees
+  const dbRows = await prisma.attendance.findMany({
+    where: {
+      employeeId: { in: employeeIds },
+      attendanceDate: { gte: filters.startDate, lte: filters.endDate },
     },
     include: {
       shift: { select: { name: true } },
@@ -99,26 +116,134 @@ export async function getAttendanceReport(
         },
       },
     },
-    orderBy: [{ attendanceDate: "asc" }, { employee: { fullName: "asc" } }],
   });
 
-  return rows.map((row) => ({
-    attendanceId: row.id,
-    employeeCode: row.employee.user.employeeCode,
-    employeeName: row.employee.fullName,
-    department: row.employee.department?.name ?? "—",
-    designation: row.employee.designation?.name ?? "—",
-    shiftName: row.shift.name,
-    date: row.attendanceDate.toISOString().slice(0, 10),
-    status: row.status,
-    checkInAt: row.checkInAt ? row.checkInAt.toISOString() : "",
-    checkOutAt: row.checkOutAt ? row.checkOutAt.toISOString() : "",
-    workingMinutes: row.workingMinutes,
-    breakMinutes: row.breakMinutes,
-    lateMinutes: row.lateMinutes,
-    overtimeMinutes: row.overtimeMinutes,
-    earlyExitMinutes: row.earlyExitMinutes,
-  }));
+  const companySettings = await prisma.companySetting.findFirst({ select: { holidayCalendar: true } });
+  const holidays = holidaySchema.array().safeParse(companySettings?.holidayCalendar ?? []);
+  const timezone = await getCompanyTimezone();
+  const holidayDates = new Set(
+    (holidays.success ? holidays.data : []).map((h) => DateTime.fromJSDate(h.date).toFormat("yyyy-MM-dd")),
+  );
+
+  // Map of employeeId_dateKey -> AttendanceRow
+  const existingMap = new Map<string, typeof dbRows[number]>();
+  for (const row of dbRows) {
+    const dateKey = DateTime.fromJSDate(row.attendanceDate, { zone: "utc" }).toFormat("yyyy-MM-dd");
+    existingMap.set(`${row.employeeId}_${dateKey}`, row);
+  }
+
+  // 3. Generate rows for each date in selected range
+  const startDt = DateTime.fromJSDate(filters.startDate, { zone: timezone }).startOf("day");
+  const endDt = DateTime.fromJSDate(filters.endDate, { zone: timezone }).endOf("day");
+  const todayKey = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
+
+  // Pre-calculate joining dates and weekly off days outside the nested loops for massive performance speedup
+  const empJoiningDates = new Map<string, string>();
+  const empWeeklyOffs = new Map<string, number[]>();
+
+  for (const emp of employees) {
+    const key = DateTime.fromJSDate(emp.joiningDate, { zone: "utc" })
+      .setZone(timezone)
+      .toFormat("yyyy-MM-dd");
+    empJoiningDates.set(emp.id, key);
+
+    const weeklyOffDays: number[] = Array.isArray(emp.shift?.weeklyOff)
+      ? (emp.shift.weeklyOff as number[])
+      : [];
+    empWeeklyOffs.set(emp.id, weeklyOffDays);
+  }
+
+  const reportRows: AttendanceReportRow[] = [];
+
+  for (let d = startDt; d <= endDt; d = d.plus({ days: 1 })) {
+    const key = d.toFormat("yyyy-MM-dd");
+    const isHoliday = holidayDates.has(key);
+    const dayOfWeekIndex = d.weekday % 7;
+
+    for (const emp of employees) {
+      const dbRow = existingMap.get(`${emp.id}_${key}`);
+
+      // Check joining date constraint
+      const joiningDateKey = empJoiningDates.get(emp.id) || "";
+      if (key < joiningDateKey) continue;
+
+      if (dbRow) {
+        // Map existing record
+        const checkOutIso = dbRow.checkOutAt ? dbRow.checkOutAt.toISOString() : "";
+        const logoutDate = checkOutIso
+          ? DateTime.fromISO(checkOutIso, { zone: "utc" }).setZone(timezone).toFormat("yyyy-MM-dd")
+          : "";
+
+        reportRows.push({
+          attendanceId: dbRow.id,
+          employeeId: emp.id,
+          employeeCode: emp.user?.employeeCode ?? "—",
+          employeeName: emp.fullName,
+          department: emp.department?.name ?? "—",
+          designation: emp.designation?.name ?? "—",
+          shiftName: dbRow.shift?.name ?? "—",
+          date: key,
+          logoutDate,
+          status: dbRow.status,
+          checkInAt: dbRow.checkInAt ? dbRow.checkInAt.toISOString() : "",
+          checkOutAt: checkOutIso,
+          workingMinutes: dbRow.workingMinutes,
+          breakMinutes: dbRow.breakMinutes,
+          lateMinutes: dbRow.lateMinutes,
+          overtimeMinutes: dbRow.overtimeMinutes,
+          earlyExitMinutes: dbRow.earlyExitMinutes,
+        });
+      } else {
+        // Generate absent/weekly_off/holiday row
+        const weeklyOffDays = empWeeklyOffs.get(emp.id) || [];
+        const isWeeklyOff = weeklyOffDays.includes(dayOfWeekIndex);
+
+        let status = "ABSENT";
+        if (isHoliday) {
+          status = "HOLIDAY";
+        } else if (isWeeklyOff) {
+          status = "WEEKLY_OFF";
+        } else if (key > todayKey) {
+          // Future dates are not 'ABSENT' yet; display as empty pending
+          status = "—";
+        }
+
+        reportRows.push({
+          attendanceId: `dynamic_${emp.id}_${key}`,
+          employeeId: emp.id,
+          employeeCode: emp.user?.employeeCode ?? "—",
+          employeeName: emp.fullName,
+          department: emp.department?.name ?? "—",
+          designation: emp.designation?.name ?? "—",
+          shiftName: emp.shift?.name ?? "—",
+          date: key,
+          logoutDate: "",
+          status,
+          checkInAt: "",
+          checkOutAt: "",
+          workingMinutes: null,
+          breakMinutes: null,
+          lateMinutes: 0,
+          overtimeMinutes: 0,
+          earlyExitMinutes: 0,
+        });
+      }
+    }
+  }
+
+  // 4. Apply status filter if provided
+  let filteredRows = reportRows;
+  if (filters.status) {
+    filteredRows = reportRows.filter((r) => r.status === filters.status);
+  }
+
+  // 5. Sort by date ascending, then employeeName ascending
+  return filteredRows.sort((a, b) => {
+    if (a.date !== b.date) {
+      return a.date.localeCompare(b.date);
+    }
+    return a.employeeName.localeCompare(b.employeeName);
+  });
 }
 
 export interface EmployeeAttendanceDetail {

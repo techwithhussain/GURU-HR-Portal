@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { CalendarDays } from "lucide-react";
+import { useServerTime } from "@/hooks/useServerTime";
 
 export function LiveClock({ timezone }: { timezone: string }) {
-  const [now, setNow] = useState<Date | null>(null);
-
-  useEffect(() => {
-    setNow(new Date());
-    const id = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(id);
-  }, []);
+  // Server-synced clock — unaffected by the browser's system clock settings.
+  const now = useServerTime();
 
   if (!now) return null;
 

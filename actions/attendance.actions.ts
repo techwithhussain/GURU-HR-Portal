@@ -134,3 +134,16 @@ export async function deleteBreakAction(breakId: string, attendanceId: string): 
   }
 }
 
+export async function toggleWeeklyOffAction(employeeId: string, dateStr: string): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await attendanceService.toggleWeeklyOff(employeeId, dateStr, session, meta);
+    revalidatePath("/reports");
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toUserMessage(err, "Failed to update weekly off status") };
+  }
+}
+

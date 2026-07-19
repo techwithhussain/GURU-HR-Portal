@@ -30,6 +30,7 @@ export default async function DashboardPage() {
         employeeCode={session?.employeeCode ?? ""}
         departmentName={profile.departmentName}
         shift={profile.shift}
+        timezone={timezone}
       />
 
       <CheckInPanel status={status} shift={profile.shift} timezone={timezone} />

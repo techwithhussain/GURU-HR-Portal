@@ -405,8 +405,16 @@ export async function getMyAttendanceCalendar(
   const timezone = await getCompanyTimezone();
   const monthStart = DateTime.fromObject({ year, month, day: 1 }, { zone: timezone }).startOf("month");
   const monthEnd = monthStart.endOf("month");
+  const todayKey = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
 
-  const [attendanceRows, settings] = await Promise.all([
+  const [employee, attendanceRows, settings] = await Promise.all([
+    prisma.employee.findUniqueOrThrow({
+      where: { id: employeeId },
+      select: {
+        joiningDate: true,
+        shift: { select: { weeklyOff: true } },
+      },
+    }),
     prisma.attendance.findMany({
       where: {
         employeeId,
@@ -422,6 +430,14 @@ export async function getMyAttendanceCalendar(
     (holidays.success ? holidays.data : []).map((h) => DateTime.fromJSDate(h.date).toFormat("yyyy-MM-dd")),
   );
 
+  const weeklyOffDays: number[] = Array.isArray(employee.shift?.weeklyOff)
+    ? (employee.shift.weeklyOff as number[])
+    : [];
+
+  const joiningDateKey = DateTime.fromJSDate(employee.joiningDate, { zone: "utc" })
+    .setZone(timezone)
+    .toFormat("yyyy-MM-dd");
+
   const byDate = new Map(
     attendanceRows.map((a) => [
       DateTime.fromJSDate(a.attendanceDate, { zone: "utc" }).toFormat("yyyy-MM-dd"),
@@ -432,7 +448,33 @@ export async function getMyAttendanceCalendar(
   const days: MyCalendarDay[] = [];
   for (let d = monthStart; d <= monthEnd; d = d.plus({ days: 1 })) {
     const key = d.toFormat("yyyy-MM-dd");
-    days.push({ date: key, status: holidayDates.has(key) ? "HOLIDAY" : (byDate.get(key) ?? null) });
+    const isHoliday = holidayDates.has(key);
+    const dbStatus = byDate.get(key);
+
+    let status: MyCalendarDay["status"] = null;
+
+    if (dbStatus) {
+      status = dbStatus as MyCalendarDay["status"];
+    } else if (isHoliday) {
+      status = "HOLIDAY";
+    } else {
+      const isFuture = key > todayKey;
+      const isBeforeJoining = key < joiningDateKey;
+
+      if (!isFuture && !isBeforeJoining) {
+        // Convert Luxon weekday (1-7, Mon=1, Sun=7) to index (0-6, Sun=0, Mon=1, etc.)
+        const dayOfWeekIndex = d.weekday % 7;
+        const isWeeklyOff = weeklyOffDays.includes(dayOfWeekIndex);
+
+        if (isWeeklyOff) {
+          status = "WEEKLY_OFF";
+        } else {
+          status = "ABSENT";
+        }
+      }
+    }
+
+    days.push({ date: key, status });
   }
   return days;
 }

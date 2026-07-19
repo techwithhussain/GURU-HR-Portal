@@ -24,6 +24,7 @@ const TOP_LEVEL_ITEMS = [
   "components.json",
   "eslint.config.mjs",
   "features",
+  "hooks",
   "lib", // minus lib/prisma-client — filtered out below
   "middleware",
   "next-env.d.ts",
