@@ -18,7 +18,7 @@ import {
   shiftStartInstant,
   type ShiftTiming,
 } from "@/lib/attendance/calculations";
-import type { CorrectAttendanceInput } from "@/lib/validation/attendance";
+import type { CorrectAttendanceInput, CorrectBreakInput } from "@/lib/validation/attendance";
 import { notifyUsers } from "@/services/notificationService";
 
 // Mirrors features/attendance/BreakSelectDialog.tsx's per-type suggested
@@ -216,7 +216,7 @@ export async function checkOut(employeeId: string, actor: SessionContext, meta: 
   requirePermission(actor, "attendance.self");
 
   const openAttendance = await prisma.attendance.findFirst({
-    where: { employeeId, checkOutAt: null },
+    where: { employeeId, checkOutAt: null, checkInAt: { not: null } },
     orderBy: { checkInAt: "desc" },
     include: { shift: true },
   });
@@ -275,7 +275,7 @@ export async function checkOut(employeeId: string, actor: SessionContext, meta: 
 
 async function requireOpenAttendance(employeeId: string) {
   const attendance = await prisma.attendance.findFirst({
-    where: { employeeId, checkOutAt: null },
+    where: { employeeId, checkOutAt: null, checkInAt: { not: null } },
     orderBy: { checkInAt: "desc" },
   });
   if (!attendance) throw new ConflictError("Log in before managing breaks");
@@ -424,7 +424,7 @@ export async function getCurrentStatus(employeeId: string) {
     // we'd find nothing and incorrectly show NOT_CHECKED_IN while they're
     // still mid-shift.
     prisma.attendance.findFirst({
-      where: { employeeId, checkOutAt: null },
+      where: { employeeId, checkOutAt: null, checkInAt: { not: null } },
       orderBy: { checkInAt: "desc" },
       include: { breaks: true },
     }),
@@ -439,7 +439,7 @@ export async function getCurrentStatus(employeeId: string) {
   // a shift that started yesterday, openAttendance wins and the dashboard
   // correctly shows CHECKED_IN / ON_BREAK rather than CHECKED_OUT.
   const current = openAttendance ?? todayAttendance;
-  if (!current) return { state: "NOT_CHECKED_IN" as const };
+  if (!current || !current.checkInAt) return { state: "NOT_CHECKED_IN" as const };
 
   const activeBreak = current.breaks.find((b) => !b.endAt);
   if (!current.checkOutAt) {
@@ -824,6 +824,97 @@ export async function deleteBreak(breakId: string, actor: SessionContext) {
       },
     });
   }
+}
+
+export async function correctBreak(
+  breakId: string,
+  input: CorrectBreakInput,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+) {
+  requirePermission(actor, "attendance.correct");
+
+  const brk = await prisma.break.findUnique({
+    where: { id: breakId },
+    include: { attendance: { include: { shift: true } } },
+  });
+  if (!brk) throw new NotFoundError("Break record not found");
+
+  const attendance = brk.attendance;
+  const attendanceId = brk.attendanceId;
+
+  const durationMin = input.endAt
+    ? Math.max(0, Math.round((input.endAt.getTime() - input.startAt.getTime()) / 60_000))
+    : null;
+
+  const updated = await prisma.break.update({
+    where: { id: breakId },
+    data: { startAt: input.startAt, endAt: input.endAt, durationMin },
+  });
+
+  // Recalculate breakMinutes (mirrors deleteBreak's tail logic)
+  const breakAgg = await prisma.break.aggregate({
+    where: { attendanceId },
+    _sum: { durationMin: true },
+  });
+  const totalBreakMinutes = breakAgg._sum.durationMin ?? 0;
+
+  const timezone = await getCompanyTimezone();
+  const shiftTiming = toShiftTiming(attendance.shift);
+
+  const checkInAt = attendance.checkInAt;
+  const checkOutAt = attendance.checkOutAt;
+
+  if (checkInAt) {
+    const lateMinutes = computeLateMinutes(checkInAt, attendance.attendanceDate, shiftTiming, timezone);
+    const workingMinutes = checkOutAt
+      ? computeWorkingMinutes(checkInAt, checkOutAt, totalBreakMinutes)
+      : null;
+    const earlyExitMinutes = checkOutAt
+      ? computeEarlyExitMinutes(checkOutAt, attendance.attendanceDate, shiftTiming, timezone)
+      : 0;
+    const overtimeMinutes =
+      workingMinutes !== null
+        ? computeOvertimeMinutes(workingMinutes, attendance.attendanceDate, shiftTiming, timezone)
+        : 0;
+    const status =
+      workingMinutes !== null
+        ? determinePunchStatus(lateMinutes, workingMinutes, shiftTiming.halfDayThresholdMin)
+        : attendance.status;
+
+    await prisma.attendance.update({
+      where: { id: attendanceId },
+      data: {
+        breakMinutes: totalBreakMinutes,
+        workingMinutes,
+        lateMinutes,
+        earlyExitMinutes,
+        overtimeMinutes,
+        status,
+      },
+    });
+  } else {
+    await prisma.attendance.update({
+      where: { id: attendanceId },
+      data: {
+        breakMinutes: totalBreakMinutes,
+      },
+    });
+  }
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "attendance.break_corrected",
+    targetEntity: "break",
+    targetId: breakId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    before: { startAt: brk.startAt.toISOString(), endAt: brk.endAt?.toISOString() ?? null, durationMin: brk.durationMin },
+    after: { startAt: updated.startAt.toISOString(), endAt: updated.endAt?.toISOString() ?? null, durationMin: updated.durationMin },
+    metadata: { reason: input.reason },
+  });
+
+  return updated;
 }
 
 export async function toggleWeeklyOff(

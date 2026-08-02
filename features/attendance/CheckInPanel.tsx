@@ -307,6 +307,11 @@ export function CheckInPanel({
       const result = await action();
       if (!result.success) {
         toast.error(result.error ?? "Something went wrong");
+        // Re-sync with the server on failure too — a stale client view (e.g.
+        // this session's attendance state changed elsewhere) is a common
+        // cause of action failures, and refreshing lets the UI self-correct
+        // instead of repeating the same failed action forever.
+        router.refresh();
         setPendingAction(null);
         return;
       }

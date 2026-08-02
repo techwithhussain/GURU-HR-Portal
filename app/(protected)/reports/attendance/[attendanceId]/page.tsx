@@ -18,6 +18,8 @@ import {
 import { AdminNotesEditor } from "@/features/reports/AdminNotesEditor";
 import { PrintButton } from "@/features/reports/PrintButton";
 import { CorrectAttendanceDialog } from "@/features/reports/CorrectAttendanceDialog";
+import { CorrectBreakDialog } from "@/features/reports/CorrectBreakDialog";
+import { DeleteBreakButton } from "@/features/reports/DeleteBreakButton";
 
 const STATUS_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   PRESENT: "default",
@@ -129,6 +131,9 @@ export default async function EmployeeAttendanceDetailPage({
           {canCorrect && (
             <CorrectAttendanceDialog
               attendanceId={attendanceId}
+              employeeName={detail.employee.fullName}
+              employeeCode={detail.employee.employeeCode}
+              attendanceDate={detail.attendance.date}
               currentCheckIn={detail.attendance.checkInAt}
               currentCheckOut={detail.attendance.checkOutAt}
             />
@@ -226,15 +231,30 @@ export default async function EmployeeAttendanceDetailPage({
                   <TableHead>Start</TableHead>
                   <TableHead>End</TableHead>
                   <TableHead>Duration</TableHead>
+                  {canCorrect && <TableHead className="print:hidden text-right">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {detail.breaks.map((b, i) => (
-                  <TableRow key={i}>
+                {detail.breaks.map((b) => (
+                  <TableRow key={b.id}>
                     <TableCell className="font-medium">{b.type}</TableCell>
                     <TableCell>{formatClock(b.startAt, timezone)}</TableCell>
                     <TableCell>{formatClock(b.endAt, timezone)}</TableCell>
                     <TableCell>{formatMinutes(b.durationMin)}</TableCell>
+                    {canCorrect && (
+                      <TableCell className="print:hidden text-right">
+                        <div className="flex justify-end gap-1">
+                          <CorrectBreakDialog
+                            breakId={b.id}
+                            attendanceId={attendanceId}
+                            breakType={b.type}
+                            currentStartAt={b.startAt}
+                            currentEndAt={b.endAt}
+                          />
+                          <DeleteBreakButton breakId={b.id} attendanceId={attendanceId} />
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))}
               </TableBody>

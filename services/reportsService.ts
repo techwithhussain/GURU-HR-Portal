@@ -274,6 +274,7 @@ export interface EmployeeAttendanceDetail {
     status: string;
   };
   breaks: Array<{
+    id: string;
     type: string;
     startAt: string;
     endAt: string | null;
@@ -398,6 +399,7 @@ export async function getEmployeeAttendanceDetail(
       status: row.status,
     },
     breaks: row.breaks.map((b) => ({
+      id: b.id,
       type: b.type,
       startAt: b.startAt.toISOString(),
       endAt: b.endAt ? b.endAt.toISOString() : null,

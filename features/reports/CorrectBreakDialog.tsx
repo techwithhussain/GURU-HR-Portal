@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { correctAttendanceAction } from "@/actions/attendance.actions";
+import { correctBreakAction } from "@/actions/attendance.actions";
 import { TimePicker, type TimeState, initTime, toDate } from "@/features/reports/TimePicker";
 
 const labelClass = "block text-xs font-medium text-muted-foreground mb-1.5";
@@ -17,45 +17,37 @@ const dialogClass =
   "relative w-full max-w-lg rounded-2xl border border-border bg-background p-6 shadow-2xl space-y-5";
 
 interface Props {
+  breakId: string;
   attendanceId: string;
-  employeeName: string;
-  employeeCode: string;
-  attendanceDate: string;
-  currentCheckIn: string | null;
-  currentCheckOut: string | null;
+  breakType: string;
+  currentStartAt: string;
+  currentEndAt: string | null;
 }
 
-export function CorrectAttendanceDialog({
-  attendanceId,
-  employeeName,
-  employeeCode,
-  attendanceDate,
-  currentCheckIn,
-  currentCheckOut,
-}: Props) {
+export function CorrectBreakDialog({ breakId, attendanceId, breakType, currentStartAt, currentEndAt }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const [checkIn, setCheckIn] = useState<TimeState>(initTime(currentCheckIn));
-  const [checkOut, setCheckOut] = useState<TimeState>(initTime(currentCheckOut));
+  const [startAt, setStartAt] = useState<TimeState>(initTime(currentStartAt));
+  const [endAt, setEndAt] = useState<TimeState>(initTime(currentEndAt));
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   function handleOpen() {
-    setCheckIn(initTime(currentCheckIn));
-    setCheckOut(initTime(currentCheckOut));
+    setStartAt(initTime(currentStartAt));
+    setEndAt(initTime(currentEndAt));
     setReason("");
     setError(null);
     setOpen(true);
   }
 
   function handleSubmit() {
-    const inDate = toDate(checkIn);
-    const outDate = checkOut.enabled ? toDate(checkOut) : null;
+    const startDate = toDate(startAt);
+    const endDate = endAt.enabled ? toDate(endAt) : null;
 
-    if (!inDate) {
-      setError("Login time is required.");
+    if (!startDate) {
+      setError("Break start time is required.");
       return;
     }
     if (!reason.trim()) {
@@ -64,16 +56,16 @@ export function CorrectAttendanceDialog({
     }
     setError(null);
     startTransition(async () => {
-      const result = await correctAttendanceAction(attendanceId, {
-        checkInAt: inDate,
-        checkOutAt: outDate,
+      const result = await correctBreakAction(breakId, attendanceId, {
+        startAt: startDate,
+        endAt: endDate,
         reason: reason.trim(),
       });
       if (!result.success) {
         setError(result.error ?? "Correction failed. Please try again.");
         return;
       }
-      toast.success("Attendance corrected successfully!");
+      toast.success("Break corrected successfully!");
       setOpen(false);
       router.refresh();
     });
@@ -81,59 +73,48 @@ export function CorrectAttendanceDialog({
 
   return (
     <>
-      <Button size="sm" variant="outline" onClick={handleOpen} className="gap-1.5 print:hidden">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-8 print:hidden"
+        onClick={handleOpen}
+        title="Correct Break"
+      >
         <Pencil className="size-3.5" />
-        Correct Attendance
       </Button>
 
       {open && (
         <div className={overlayClass} onClick={() => !isPending && setOpen(false)}>
           <div className={dialogClass} onClick={(e) => e.stopPropagation()}>
             <div>
-              <h2 className="text-base font-semibold">Correct Attendance</h2>
-              <div className="mt-2 flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2">
-                <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-orange to-brand-orange-light text-[11px] font-semibold text-white">
-                  {employeeName
-                    .trim()
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((p) => p[0]?.toUpperCase() ?? "")
-                    .join("")}
-                </div>
-                <div className="leading-tight">
-                  <p className="text-sm font-semibold">{employeeName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {employeeCode} · {attendanceDate}
-                  </p>
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Update the login/logout time and provide a reason for the correction.
+              <h2 className="text-base font-semibold">Correct Break</h2>
+              <p className="text-xs text-muted-foreground mt-1">
+                {breakType} break — update the start/end time and provide a reason for the correction.
               </p>
             </div>
 
             <div className="space-y-4">
               <TimePicker
-                label="Login Time (corrected)"
-                state={checkIn}
-                onChange={setCheckIn}
+                label="Break Start (corrected)"
+                state={startAt}
+                onChange={setStartAt}
                 disabled={isPending}
                 alwaysEnabled={true}
               />
 
               <TimePicker
-                label="Logout Time (corrected)"
-                state={checkOut}
-                onChange={setCheckOut}
+                label="Break End (corrected)"
+                state={endAt}
+                onChange={setEndAt}
                 disabled={isPending}
-                hint="Uncheck Logout if you only need to correct the login time (leaves session open)."
+                hint="Uncheck End if this break should stay active (open)."
               />
 
               <div>
                 <label className={labelClass}>Reason for Correction *</label>
                 <textarea
                   className="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none"
-                  placeholder="e.g. Employee logged in late due to night shift start time..."
+                  placeholder="e.g. Employee forgot to end break on time..."
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   disabled={isPending}
@@ -148,12 +129,7 @@ export function CorrectAttendanceDialog({
             </div>
 
             <div className="flex gap-2 justify-end pt-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setOpen(false)}
-                disabled={isPending}
-              >
+              <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={isPending}>
                 Cancel
               </Button>
               <Button size="sm" onClick={handleSubmit} disabled={isPending}>

@@ -24,4 +24,11 @@ const envSchema = z.object({
   SMTP_FROM: z.string().default("GDA EMS <no-reply@gurudigitaladvertising.com>"),
 });
 
-export const env = envSchema.parse(process.env);
+const parsed = envSchema.safeParse(process.env);
+
+if (!parsed.success) {
+  console.error("Invalid environment variables:", z.treeifyError(parsed.error));
+  throw new Error("Invalid environment variables — see logged details above.");
+}
+
+export const env = parsed.data;

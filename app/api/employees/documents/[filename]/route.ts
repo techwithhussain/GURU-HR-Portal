@@ -33,13 +33,15 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
 
   const ext = filename.split(".").pop() ?? "";
   const mimeType = EXT_TO_MIME[ext] ?? "application/octet-stream";
+  const wantsDownload = new URL(request.url).searchParams.has("download");
+  const disposition = wantsDownload ? "attachment" : "inline";
 
   try {
     const buffer = await readFile(path.join(STORAGE_DIR, filename));
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": mimeType,
-        "Content-Disposition": `inline; filename="${doc.fileName}"`,
+        "Content-Disposition": `${disposition}; filename="${doc.fileName}"`,
       },
     });
   } catch {

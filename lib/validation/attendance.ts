@@ -19,3 +19,14 @@ export const correctAttendanceSchema = z
 
 export type CorrectAttendanceInput = z.infer<typeof correctAttendanceSchema>;
 
+export const correctBreakSchema = z.object({
+  startAt: z.coerce.date(),
+  endAt: z.preprocess(
+    (val) => (val === "" || val === null ? null : val),
+    z.coerce.date().nullable()
+  ),
+  reason: z.string().min(1, "A reason is required for break corrections."),
+});
+
+export type CorrectBreakInput = z.infer<typeof correctBreakSchema>;
+

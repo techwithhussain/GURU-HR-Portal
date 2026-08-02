@@ -19,6 +19,11 @@ export interface ActionResult<T = null> {
   error?: string;
 }
 
+export async function listMyDocumentsAction() {
+  const session = await requireSession();
+  return employeeDocumentService.listMyDocuments(session);
+}
+
 export async function attachEmployeeDocumentAction(input: unknown): Promise<ActionResult> {
   const parsed = attachEmployeeDocumentSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input" };
@@ -28,6 +33,7 @@ export async function attachEmployeeDocumentAction(input: unknown): Promise<Acti
     const meta = await requestMeta();
     await employeeDocumentService.attachEmployeeDocument(parsed.data, session, meta);
     revalidatePath(`/admin/employees/${parsed.data.employeeId}`);
+    revalidatePath("/documents");
     return { success: true };
   } catch (err) {
     return { success: false, error: toUserMessage(err, "Failed to attach document") };
@@ -40,6 +46,7 @@ export async function deleteEmployeeDocumentAction(documentId: string, employeeI
     const meta = await requestMeta();
     await employeeDocumentService.deleteEmployeeDocument(documentId, session, meta);
     revalidatePath(`/admin/employees/${employeeId}`);
+    revalidatePath("/documents");
     return { success: true };
   } catch (err) {
     return { success: false, error: toUserMessage(err, "Failed to delete document") };

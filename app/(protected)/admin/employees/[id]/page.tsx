@@ -406,6 +406,11 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
                     View
                   </a>
                 </Button>
+                <Button asChild variant="outline" size="sm">
+                  <a href={`/api/employees/documents/${doc.storagePath}?download=1`} download={doc.fileName}>
+                    Download
+                  </a>
+                </Button>
                 <DeleteDocumentButton documentId={doc.id} employeeId={id} />
               </div>
             </div>

@@ -32,7 +32,7 @@ const EMPLOYEE_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/reports", label: "Attendance History", icon: FileBarChart2 },
   { href: "/leave", label: "My Leave", icon: Plane },
   { href: "/coming-soon?feature=Salary+Slip", label: "Salary Slip", icon: Wallet },
-  { href: "/coming-soon?feature=Documents", label: "Documents", icon: Folder },
+  { href: "/documents", label: "Documents", icon: Folder },
   { href: "/coming-soon?feature=Holidays", label: "Holidays", icon: CalendarDays },
   { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/coming-soon?feature=Profile", label: "Profile", icon: User },

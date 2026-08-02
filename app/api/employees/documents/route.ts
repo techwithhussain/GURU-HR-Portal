@@ -3,7 +3,6 @@ import path from "path";
 import { mkdir, writeFile } from "fs/promises";
 import { NextResponse } from "next/server";
 import { requireSession } from "@/services/sessionService";
-import { requirePermission } from "@/lib/rbac/permissions";
 
 const STORAGE_DIR = path.join(process.cwd(), "storage", "employee-documents");
 
@@ -15,9 +14,12 @@ const ALLOWED_MIME_TO_EXT: Record<string, string> = {
 
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 
+// Any authenticated user may upload a file here — this only writes bytes to
+// disk and returns a storage path; it isn't linked to an employee record (and
+// so isn't visible or accessible to anyone) until attachEmployeeDocument()
+// creates that link, which is where the real self-vs-admin authorization lives.
 export async function POST(request: Request) {
-  const session = await requireSession();
-  requirePermission(session, "employee.manage");
+  await requireSession();
 
   const formData = await request.formData();
   const file = formData.get("file");

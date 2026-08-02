@@ -2,7 +2,7 @@ import archiver from "archiver";
 import { createWriteStream, statSync, readdirSync } from "node:fs";
 import path from "node:path";
 
-const ROOT = "C:/HR Portal";
+const ROOT = process.cwd();
 const OUTPUT = path.join(ROOT, "hr-portal-deploy.zip");
 
 // Everything the app needs to run, mirroring the previous manual deploy zip —
