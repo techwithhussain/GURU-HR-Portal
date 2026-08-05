@@ -185,20 +185,9 @@ export function EmployeeTable({
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2">
-                    {e.profileImageUrl ? (
-                      <Image
-                        src={`/api/employees/photo/${e.profileImageUrl}`}
-                        alt=""
-                        width={28}
-                        height={28}
-                        unoptimized
-                        className="size-7 shrink-0 rounded-full object-cover"
-                      />
-                    ) : (
                       <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-orange to-brand-orange-light text-[10px] font-semibold text-white">
                         {initials(e.fullName)}
                       </div>
-                    )}
                     <Link href={`/admin/employees/${e.id}`} className="font-medium hover:underline">
                       {e.fullName}
                     </Link>

@@ -31,9 +31,8 @@ const ACTIONS: QuickAction[] = [
   {
     icon: UserCog,
     label: "Edit Profile",
-    href: "/coming-soon?feature=Edit+Profile",
+    href: "/profile",
     soft: "bg-slate-100 text-slate-600",
-    disabled: true,
   },
 ];
 

@@ -153,6 +153,7 @@ model Employee {
   shiftId          String?
   managerId        String?
   joiningDate      DateTime       @db.Date
+  dateOfBirth      DateTime?      @db.Date
   salary           Decimal?       @db.Decimal(12, 2)
   salaryType       String?
   allowances       Decimal?       @db.Decimal(12, 2)

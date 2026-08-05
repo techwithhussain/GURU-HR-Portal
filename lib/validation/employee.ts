@@ -12,6 +12,7 @@ export const createEmployeeSchema = z.object({
   shiftId: z.string().min(1).optional(),
   managerId: z.string().min(1).optional(),
   joiningDate: z.coerce.date(),
+  dateOfBirth: z.coerce.date().optional(),
   salary: z.coerce.number().nonnegative().optional(),
   salaryType: z.enum(["MONTHLY", "HOURLY", "ANNUAL"]).optional(),
   allowances: z.coerce.number().nonnegative().optional(),
@@ -33,6 +34,7 @@ export const updateEmployeeSchema = z.object({
   managerId: z.string().min(1).optional(),
   roleId: z.string().min(1).optional(),
   joiningDate: z.coerce.date().optional(),
+  dateOfBirth: z.coerce.date().optional(),
   salary: z.coerce.number().nonnegative().optional(),
   salaryType: z.enum(["MONTHLY", "HOURLY", "ANNUAL"]).optional(),
   allowances: z.coerce.number().nonnegative().optional(),
@@ -43,6 +45,16 @@ export const updateEmployeeSchema = z.object({
 });
 
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+
+export const updateMyProfileSchema = z.object({
+  phone: z.string().optional(),
+  address: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  photoPath: z.string().optional(),
+  photoFileName: z.string().optional(),
+});
+
+export type UpdateMyProfileInput = z.infer<typeof updateMyProfileSchema>;
 
 export const employeeSearchSchema = z.object({
   query: z.string().optional(),

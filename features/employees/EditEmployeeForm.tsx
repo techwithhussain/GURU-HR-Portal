@@ -6,7 +6,6 @@ import { updateEmployeeAction, type UpdateEmployeeFormState } from "@/actions/em
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PhotoUpload } from "@/features/employees/PhotoUpload";
 
 interface Option {
   id: string;
@@ -49,7 +48,7 @@ export function EditEmployeeForm({
     allowances?: unknown;
     deductions?: unknown;
     emergencyContact: string | null;
-    profileImageUrl: string | null;
+    dateOfBirth: Date | string | null;
     user: { roleId: string };
   };
   departments: Option[];
@@ -74,8 +73,6 @@ export function EditEmployeeForm({
 
   return (
     <form action={formAction} className="grid max-w-xl gap-4">
-      <PhotoUpload initialPhotoPath={employee.profileImageUrl} />
-
       <div className="space-y-2">
         <Label htmlFor="fullName">Full name</Label>
         <Input id="fullName" name="fullName" defaultValue={employee.fullName} required />
@@ -89,6 +86,15 @@ export function EditEmployeeForm({
         <div className="space-y-2">
           <Label htmlFor="joiningDate">Joining Date</Label>
           <Input id="joiningDate" name="joiningDate" type="date" defaultValue={toDateInputValue(employee.joiningDate)} />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="dateOfBirth">Date of Birth</Label>
+          <Input
+            id="dateOfBirth"
+            name="dateOfBirth"
+            type="date"
+            defaultValue={employee.dateOfBirth ? toDateInputValue(employee.dateOfBirth) : ""}
+          />
         </div>
       </div>
 

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getEmployeesWorkingAction } from "@/actions/dashboard.actions";
 import type { EmployeeWorking } from "@/services/dashboardService";
 import { useServerTime } from "@/hooks/useServerTime";
+import { ForceLogoutButton } from "@/features/dashboard/ForceLogoutButton";
 
 const REFRESH_INTERVAL_MS = 8000;
 
@@ -52,11 +53,13 @@ export function EmployeesWorkingWidget({
   // Server-synced clock — unaffected by the admin's system clock settings.
   const now = useServerTime();
 
+  async function refresh() {
+    const fresh = await getEmployeesWorkingAction();
+    setEmployees(fresh);
+  }
+
   useEffect(() => {
-    const poll = setInterval(async () => {
-      const fresh = await getEmployeesWorkingAction();
-      setEmployees(fresh);
-    }, REFRESH_INTERVAL_MS);
+    const poll = setInterval(refresh, REFRESH_INTERVAL_MS);
     return () => clearInterval(poll);
   }, []);
 
@@ -111,6 +114,7 @@ export function EmployeesWorkingWidget({
                   {now ? elapsedLabel(seconds) : "--:--"}
                 </span>
               </div>
+              <ForceLogoutButton employeeId={emp.employeeId} employeeName={emp.employeeName} onDone={refresh} />
             </div>
           );
         })}

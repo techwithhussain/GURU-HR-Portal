@@ -1,4 +1,6 @@
 import "server-only";
+import path from "path";
+import { unlink } from "fs/promises";
 import { DateTime } from "luxon";
 import type { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +16,10 @@ import type {
   CreateEmployeeInput,
   EmployeeSearchInput,
   UpdateEmployeeInput,
+  UpdateMyProfileInput,
 } from "@/lib/validation/employee";
+
+const EMPLOYEE_PHOTO_DIR = path.join(process.cwd(), "storage", "employee-photos");
 
 const PROBATION_DAYS = 90;
 
@@ -120,6 +125,7 @@ export async function updateEmployee(
         shiftId: input.shiftId,
         managerId: input.managerId,
         joiningDate: input.joiningDate,
+        dateOfBirth: input.dateOfBirth,
         salary: input.salary,
         salaryType: input.salaryType,
         allowances: input.allowances,
@@ -140,6 +146,71 @@ export async function updateEmployee(
     userAgent: meta.userAgent,
     before: existing as Prisma.InputJsonValue,
     after: updated as Prisma.InputJsonValue,
+  });
+
+  return updated;
+}
+
+/** Self-service: the logged-in employee's own profile. */
+export async function getMyProfile(actor: SessionContext) {
+  if (!actor.employeeId) throw new NotFoundError("No employee profile linked to this account");
+
+  const employee = await prisma.employee.findFirst({
+    where: { id: actor.employeeId, deletedAt: null },
+    select: employeeSelect(actor),
+  });
+  if (!employee) throw new NotFoundError("Employee not found");
+  return employee;
+}
+
+/**
+ * Self-service: an employee may update their own contact details and photo —
+ * everything else (department, designation, shift, salary, status...) stays
+ * admin-only via `updateEmployee`.
+ */
+export async function updateMyProfile(
+  input: UpdateMyProfileInput,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+) {
+  if (!actor.employeeId) throw new NotFoundError("No employee profile linked to this account");
+
+  const existing = await prisma.employee.findFirst({
+    where: { id: actor.employeeId, deletedAt: null },
+    select: { profileImageUrl: true },
+  });
+  if (!existing) throw new NotFoundError("Employee not found");
+
+  const updated = await prisma.employee.update({
+    where: { id: actor.employeeId },
+    data: {
+      phone: input.phone,
+      address: input.address,
+      emergencyContact: input.emergencyContact,
+      profileImageUrl: input.photoPath,
+    },
+    select: employeeSelect(actor),
+  });
+
+  // Replacing the photo — best-effort delete of the old file so uploads
+  // don't accumulate on disk. Never blocks the profile update itself.
+  if (input.photoPath && existing.profileImageUrl && existing.profileImageUrl !== input.photoPath) {
+    unlink(path.join(EMPLOYEE_PHOTO_DIR, existing.profileImageUrl)).catch(() => {});
+  }
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "employee.self_updated_profile",
+    targetEntity: "employee",
+    targetId: actor.employeeId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    metadata: {
+      phoneChanged: input.phone !== undefined,
+      addressChanged: input.address !== undefined,
+      emergencyContactChanged: input.emergencyContact !== undefined,
+      photoChanged: !!input.photoPath,
+    },
   });
 
   return updated;

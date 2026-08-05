@@ -19,6 +19,7 @@ export interface DashboardSummary {
   workingNow: number;
   checkedOutToday: number;
   absentToday: number;
+  upcomingToday: number;
 }
 
 export async function getDashboardSummary(actor: SessionContext): Promise<DashboardSummary> {
@@ -26,6 +27,9 @@ export async function getDashboardSummary(actor: SessionContext): Promise<Dashbo
 
   const timezone = await getCompanyTimezone();
   const today = attendanceDateForCheckIn(new Date(), timezone);
+  const nowLocal = DateTime.now().setZone(timezone);
+  const nowMinutesOfDay = nowLocal.hour * 60 + nowLocal.minute;
+  const GRACE_MINUTES = 30;
 
   const [
     totalEmployees,
@@ -35,6 +39,7 @@ export async function getDashboardSummary(actor: SessionContext): Promise<Dashbo
     workingNow,
     onBreakNow,
     stillOpenFromBeforeToday,
+    upcomingTodayCount,
   ] = await Promise.all([
     prisma.employee.count({ where: { status: "ACTIVE", deletedAt: null } }),
     prisma.attendance.groupBy({
@@ -44,25 +49,32 @@ export async function getDashboardSummary(actor: SessionContext): Promise<Dashbo
     }),
     prisma.attendance.count({ where: { attendanceDate: today, checkInAt: { not: null } } }),
     prisma.attendance.count({ where: { attendanceDate: today, checkOutAt: { not: null } } }),
-    // Real-time headcount, deliberately not scoped to today's attendanceDate —
-    // a night shift (e.g. 9 PM-6 AM) is filed under the day it started, so an
-    // employee still clocked in after midnight would otherwise vanish from
-    // "today's" numbers the moment the calendar date rolls over.
     prisma.attendance.count({
       where: { checkInAt: { not: null }, checkOutAt: null, breaks: { none: { endAt: null } } },
     }),
     prisma.break.count({ where: { endAt: null } }),
-    // Employees mid-shift from a still-open PREVIOUS day's row — without this,
-    // "Absent Today" would wrongly count them since they don't have a row
-    // dated today yet (their shift is still filed under yesterday).
     prisma.attendance.count({
       where: { attendanceDate: { lt: today }, checkInAt: { not: null }, checkOutAt: null },
+    }),
+    prisma.employee.count({
+      where: {
+        status: "ACTIVE",
+        deletedAt: null,
+        shift: { startMinutesOfDay: { gt: nowMinutesOfDay + GRACE_MINUTES } },
+        attendance: {
+          none: {
+            attendanceDate: today,
+          },
+        },
+      },
     }),
   ]);
 
   const presentToday = statusCounts.find((s) => s.status === "PRESENT")?._count ?? 0;
   const lateToday = statusCounts.find((s) => s.status === "LATE")?._count ?? 0;
   const accountedForToday = checkedInTodayCount + stillOpenFromBeforeToday;
+  const rawAbsent = Math.max(0, totalEmployees - accountedForToday);
+  const absentToday = Math.max(0, rawAbsent - upcomingTodayCount);
 
   return {
     totalEmployees,
@@ -71,7 +83,8 @@ export async function getDashboardSummary(actor: SessionContext): Promise<Dashbo
     onBreakNow,
     workingNow,
     checkedOutToday: checkedOutTodayCount,
-    absentToday: Math.max(0, totalEmployees - accountedForToday),
+    absentToday,
+    upcomingToday: upcomingTodayCount,
   };
 }
 
@@ -158,6 +171,11 @@ export async function getShiftBreakdown(actor: SessionContext): Promise<ShiftBre
       ? nowMinutesOfDay >= shift.startMinutesOfDay || nowMinutesOfDay < shift.endMinutesOfDay
       : nowMinutesOfDay >= shift.startMinutesOfDay && nowMinutesOfDay < shift.endMinutesOfDay;
 
+    const GRACE_MINUTES = 30;
+    const shiftHasStarted = nowMinutesOfDay >= shift.startMinutesOfDay + GRACE_MINUTES || isCurrentlyActive;
+    const rawAbsent = Math.max(0, totalEmployees - (checkedInToday + stillOpenFromBefore));
+    const absentToday = shiftHasStarted ? rawAbsent : 0;
+
     return {
       shiftId: shift.id,
       shiftName: shift.name,
@@ -169,7 +187,7 @@ export async function getShiftBreakdown(actor: SessionContext): Promise<ShiftBre
       lateToday: status.late,
       workingNow: workingNowMap.get(shift.id) ?? 0,
       onBreakNow: onBreakMap.get(shift.id) ?? 0,
-      absentToday: Math.max(0, totalEmployees - (checkedInToday + stillOpenFromBefore)),
+      absentToday,
     };
   });
 }
@@ -231,6 +249,8 @@ export interface MyDashboardProfile {
   departmentName: string | null;
   designationName: string | null;
   profileImageUrl: string | null;
+  joiningDate: Date;
+  dateOfBirth: Date | null;
   shift: { name: string; startMinutesOfDay: number; endMinutesOfDay: number } | null;
 }
 
@@ -247,6 +267,8 @@ export async function getMyDashboardProfile(actor: SessionContext): Promise<MyDa
     select: {
       fullName: true,
       profileImageUrl: true,
+      joiningDate: true,
+      dateOfBirth: true,
       department: { select: { name: true } },
       designation: { select: { name: true } },
       shift: { select: { name: true, startMinutesOfDay: true, endMinutesOfDay: true } },
@@ -258,6 +280,8 @@ export async function getMyDashboardProfile(actor: SessionContext): Promise<MyDa
     departmentName: employee.department?.name ?? null,
     designationName: employee.designation?.name ?? null,
     profileImageUrl: employee.profileImageUrl,
+    joiningDate: employee.joiningDate,
+    dateOfBirth: employee.dateOfBirth,
     shift: employee.shift,
   };
 }
@@ -323,7 +347,8 @@ export interface AdminCalendarDay {
   lateCount: number;
   halfDayCount: number;
   onLeaveCount: number;
-  absentCount: number;
+  absentCount: number;    // truly absent: shift started + grace period passed, no check-in
+  upcomingCount: number;  // shift not started yet (only > 0 for today)
   isHoliday: boolean;
   isFuture: boolean;
 }
@@ -338,9 +363,15 @@ export async function getAdminAttendanceCalendar(
   const timezone = await getCompanyTimezone();
   const monthStart = DateTime.fromObject({ year, month, day: 1 }, { zone: timezone }).startOf("month");
   const monthEnd = monthStart.endOf("month");
-  const todayKey = DateTime.now().setZone(timezone).toFormat("yyyy-MM-dd");
+  const todayDt = DateTime.now().setZone(timezone);
+  const todayKey = todayDt.toFormat("yyyy-MM-dd");
 
-  const [totalEmployees, rows, settings] = await Promise.all([
+  // Grace period: employee is "upcoming" if their shift starts more than
+  // GRACE_MINUTES from now (they haven't had a chance to be late yet).
+  const GRACE_MINUTES = 30;
+  const nowMinutes = todayDt.hour * 60 + todayDt.minute;
+
+  const [totalEmployees, rows, settings, upcomingToday] = await Promise.all([
     prisma.employee.count({ where: { status: "ACTIVE", deletedAt: null } }),
     prisma.attendance.groupBy({
       by: ["attendanceDate", "status"],
@@ -348,6 +379,22 @@ export async function getAdminAttendanceCalendar(
       _count: true,
     }),
     prisma.companySetting.findFirst({ select: { holidayCalendar: true } }),
+    // For today only: count employees whose shift hasn't started yet AND who haven't checked in.
+    prisma.employee.count({
+      where: {
+        status: "ACTIVE",
+        deletedAt: null,
+        shift: { startMinutesOfDay: { gt: nowMinutes + GRACE_MINUTES } },
+        attendance: {
+          none: {
+            attendanceDate: {
+              gte: todayDt.startOf("day").toUTC().toJSDate(),
+              lte: todayDt.endOf("day").toUTC().toJSDate(),
+            },
+          },
+        },
+      },
+    }),
   ]);
 
   const holidays = holidaySchema.array().safeParse(settings?.holidayCalendar ?? []);
@@ -372,9 +419,14 @@ export async function getAdminAttendanceCalendar(
     const halfDayCount = counts.HALF_DAY ?? 0;
     const onLeaveCount = counts.ON_LEAVE ?? 0;
     const isFuture = key > todayKey;
-    const absentCount = isFuture
+
+    const rawAbsent = isFuture
       ? 0
       : Math.max(0, totalEmployees - (presentCount + lateCount + halfDayCount + onLeaveCount));
+
+    // For today: separate "upcoming" (shift not started) from truly absent
+    const upcomingCount = key === todayKey ? upcomingToday : 0;
+    const absentCount = Math.max(0, rawAbsent - upcomingCount);
 
     days.push({
       date: key,
@@ -383,6 +435,7 @@ export async function getAdminAttendanceCalendar(
       halfDayCount,
       onLeaveCount,
       absentCount,
+      upcomingCount,
       isHoliday: holidayDates.has(key),
       isFuture,
     });

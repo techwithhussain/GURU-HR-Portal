@@ -132,20 +132,9 @@ export default async function EmployeeProfilePage({ params }: { params: Promise<
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-light to-brand-orange p-6 text-white shadow-elevated">
         <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-white/10 blur-3xl" />
         <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center">
-          {e.profileImageUrl ? (
-            <Image
-              src={`/api/employees/photo/${e.profileImageUrl}`}
-              alt=""
-              width={64}
-              height={64}
-              unoptimized
-              className="size-16 shrink-0 rounded-2xl object-cover ring-2 ring-white/30"
-            />
-          ) : (
             <div className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-white/15 text-xl font-bold backdrop-blur-md">
               {initials(e.fullName)}
             </div>
-          )}
           <div className="flex-1 space-y-2">
             <div>
               <h1 className="text-xl font-bold">{e.fullName}</h1>

@@ -1,8 +1,6 @@
 import path from "path";
 import { readFile } from "fs/promises";
 import { getSessionContext } from "@/services/sessionService";
-import { hasPermission } from "@/lib/rbac/permissions";
-import { prisma } from "@/lib/prisma";
 
 const STORAGE_DIR = path.join(process.cwd(), "storage", "employee-photos");
 
@@ -11,6 +9,12 @@ const EXT_TO_MIME: Record<string, string> = {
   png: "image/png",
 };
 
+// Any authenticated user may view any employee photo by its (unguessable,
+// UUID-named) filename — these are just avatars, already shown across the
+// app to any logged-in colleague, unlike personal documents. This also
+// avoids depending on the DB link, which isn't written until the profile
+// form is actually saved — an ownership-by-DB-lookup check would 404 the
+// live preview shown between "upload" and "Save changes".
 export async function GET(request: Request, { params }: { params: Promise<{ filename: string }> }) {
   const session = await getSessionContext();
   if (!session) return new Response("Unauthorized", { status: 401 });
@@ -23,16 +27,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ file
   const ext = filename.split(".").pop() ?? "";
   const mimeType = EXT_TO_MIME[ext];
   if (!mimeType) return new Response("Not found", { status: 404 });
-
-  const owner = await prisma.employee.findFirst({
-    where: { profileImageUrl: filename },
-    select: { id: true },
-  });
-  if (!owner) return new Response("Not found", { status: 404 });
-
-  const isOwner = session.employeeId === owner.id;
-  const isAdmin = hasPermission(session, "employee.manage");
-  if (!isOwner && !isAdmin) return new Response("Forbidden", { status: 403 });
 
   try {
     const buffer = await readFile(path.join(STORAGE_DIR, filename));

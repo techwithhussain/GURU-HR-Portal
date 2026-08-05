@@ -68,20 +68,9 @@ function PersonCard({ person }: { person: EmployeeOnBreak }) {
   const Icon = meta.icon;
   return (
     <div className="flex items-center gap-4 rounded-3xl bg-white/10 p-5 backdrop-blur-sm ring-1 ring-white/10">
-      {person.profileImageUrl ? (
-        <Image
-          src={`/api/employees/photo/${person.profileImageUrl}`}
-          alt=""
-          width={64}
-          height={64}
-          unoptimized
-          className="size-16 shrink-0 rounded-full object-cover"
-        />
-      ) : (
         <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-orange to-brand-orange-light text-xl font-bold text-white">
           {initials(person.employeeName)}
         </div>
-      )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-xl font-semibold text-white">{person.employeeName}</p>
         <p className="truncate text-sm text-white/60">{person.department ?? "—"}</p>

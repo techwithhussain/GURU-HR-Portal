@@ -2,9 +2,13 @@ import "server-only";
 import type { Prisma } from "@/lib/prisma-client/client";
 import { prisma } from "@/lib/prisma";
 import { sendMail } from "@/lib/mailer";
+import { requirePermission } from "@/lib/rbac/permissions";
+import { recordAudit } from "@/services/auditService";
 import { NotFoundError } from "@/services/employeeService";
+import type { RequestMeta } from "@/services/employeeService";
 import type { SessionContext } from "@/types/session";
 import type { NotificationType } from "@/lib/validation/notification";
+import type { SendAdminAnnouncementInput } from "@/lib/validation/notification";
 
 export interface NotificationEmail {
   subject: string;
@@ -43,6 +47,41 @@ export async function notifyUsers(
   if (email) {
     await Promise.all(uniqueIds.map((userId) => sendEmailToUser(userId, email)));
   }
+}
+
+/** Admin-composed announcement, broadcast to all employees, one department, or a single employee. */
+export async function sendAdminAnnouncement(
+  input: SendAdminAnnouncementInput,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+): Promise<{ recipientCount: number }> {
+  requirePermission(actor, "employee.manage");
+
+  const where: Prisma.EmployeeWhereInput = { deletedAt: null, status: "ACTIVE" };
+  if (input.audience === "DEPARTMENT") where.departmentId = input.departmentId;
+  if (input.audience === "EMPLOYEE") where.id = input.employeeId;
+
+  const employees = await prisma.employee.findMany({ where, select: { userId: true } });
+  const userIds = employees.map((e) => e.userId);
+
+  await notifyUsers(
+    userIds,
+    "ADMIN_ANNOUNCEMENT",
+    { subject: input.subject, message: input.message },
+    input.sendEmail ? { subject: input.subject, text: input.message } : undefined,
+  );
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "notification.admin_announcement_sent",
+    targetEntity: "notification",
+    targetId: actor.userId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    metadata: { audience: input.audience, departmentId: input.departmentId, employeeId: input.employeeId, subject: input.subject, recipientCount: userIds.length },
+  });
+
+  return { recipientCount: userIds.length };
 }
 
 export async function listMyNotifications(actor: SessionContext) {

@@ -51,6 +51,19 @@ export async function checkOutAction(): Promise<ActionResult> {
   }
 }
 
+export async function adminForceCheckOutAction(employeeId: string, reason?: string): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await attendanceService.checkOut(employeeId, session, meta, reason);
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/reports");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toUserMessage(err, "Failed to log out employee") };
+  }
+}
+
 export async function startBreakAction(input: unknown): Promise<ActionResult> {
   const parsed = startBreakSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid break type" };

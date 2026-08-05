@@ -212,8 +212,17 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
   }
 }
 
-export async function checkOut(employeeId: string, actor: SessionContext, meta: RequestMeta = {}) {
-  requirePermission(actor, "attendance.self");
+export async function checkOut(
+  employeeId: string,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+  adminReason?: string,
+) {
+  // Admins may force-checkout any employee (attendance.correct); employees may
+  // only check themselves out (attendance.self) — enforced by which permission
+  // is required below.
+  const isSelf = actor.employeeId === employeeId;
+  requirePermission(actor, isSelf ? "attendance.self" : "attendance.correct");
 
   const openAttendance = await prisma.attendance.findFirst({
     where: { employeeId, checkOutAt: null, checkInAt: { not: null } },
@@ -224,15 +233,22 @@ export async function checkOut(employeeId: string, actor: SessionContext, meta: 
     throw new ConflictError("No active login found");
   }
 
+  const timezone = await getCompanyTimezone();
+  const now = new Date();
+
   const activeBreak = await prisma.break.findFirst({
     where: { attendanceId: openAttendance.id, endAt: null },
   });
   if (activeBreak) {
-    throw new ConflictError("End your active break before logging out");
+    if (isSelf) {
+      throw new ConflictError("End your active break before logging out");
+    }
+    // Admin force-checkout: close the dangling break at "now" instead of
+    // blocking — this is exactly the scenario (employee stepped away and
+    // never came back) the force-logout button exists for.
+    const durationMin = Math.max(0, Math.round((now.getTime() - activeBreak.startAt.getTime()) / 60_000));
+    await prisma.break.update({ where: { id: activeBreak.id }, data: { endAt: now, durationMin } });
   }
-
-  const timezone = await getCompanyTimezone();
-  const now = new Date();
 
   const breakAgg = await prisma.break.aggregate({
     where: { attendanceId: openAttendance.id },
@@ -262,13 +278,24 @@ export async function checkOut(employeeId: string, actor: SessionContext, meta: 
 
   await recordAudit({
     actorUserId: actor.userId,
-    action: "attendance.check_out",
+    action: isSelf ? "attendance.check_out" : "attendance.forced_check_out",
     targetEntity: "attendance",
     targetId: updated.id,
     ip: meta.ip,
     userAgent: meta.userAgent,
-    metadata: { workingMinutes, earlyExitMinutes, overtimeMinutes },
+    metadata: { workingMinutes, earlyExitMinutes, overtimeMinutes, adminReason },
   });
+
+  if (!isSelf) {
+    const employee = await prisma.employee.findUnique({ where: { id: employeeId }, select: { userId: true } });
+    if (employee) {
+      await notifyUsers(
+        [employee.userId],
+        "FORCED_LOGOUT",
+        { reason: adminReason ?? null, workingMinutes, status },
+      );
+    }
+  }
 
   return updated;
 }

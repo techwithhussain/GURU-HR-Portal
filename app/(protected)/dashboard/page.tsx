@@ -3,6 +3,7 @@ import { getSessionContext } from "@/services/sessionService";
 import { getAttendanceStatusAction } from "@/actions/attendance.actions";
 import { getMyDashboardProfileAction, getMyDashboardStatsAction } from "@/actions/dashboard.actions";
 import { getCompanyTimezone } from "@/services/reportsService";
+import { getUpcomingBirthdays, dispatchBirthdayNotifications } from "@/services/birthdayService";
 import { CheckInPanel } from "@/features/attendance/CheckInPanel";
 import { HeroBanner } from "@/features/dashboard/HeroBanner";
 import { StatCards } from "@/features/dashboard/StatCards";
@@ -10,6 +11,7 @@ import { AttendanceCalendar } from "@/features/dashboard/AttendanceCalendar";
 import { QuickActions } from "@/features/dashboard/QuickActions";
 import { TodaysTasksPlaceholder } from "@/features/dashboard/TodaysTasksPlaceholder";
 import { CompanyNewsPlaceholder } from "@/features/dashboard/CompanyNewsPlaceholder";
+import { UpcomingBirthdaysCard } from "@/features/dashboard/UpcomingBirthdaysCard";
 
 export default async function DashboardPage() {
   const session = await getSessionContext();
@@ -23,6 +25,12 @@ export default async function DashboardPage() {
     getCompanyTimezone(),
   ]);
 
+  // Fetch upcoming birthdays & dispatch notifications in parallel
+  const [upcomingBirthdays] = await Promise.all([
+    getUpcomingBirthdays(timezone, session.employeeId ?? undefined),
+    dispatchBirthdayNotifications(session, timezone),
+  ]);
+
   return (
     <div className="space-y-6">
       <HeroBanner
@@ -31,6 +39,8 @@ export default async function DashboardPage() {
         departmentName={profile.departmentName}
         shift={profile.shift}
         timezone={timezone}
+        joiningDate={profile.joiningDate}
+        dateOfBirth={profile.dateOfBirth}
       />
 
       <CheckInPanel status={status} shift={profile.shift} timezone={timezone} />
@@ -43,6 +53,7 @@ export default async function DashboardPage() {
           <CompanyNewsPlaceholder />
         </div>
         <div className="space-y-6">
+          <UpcomingBirthdaysCard birthdays={upcomingBirthdays} />
           <QuickActions />
           <TodaysTasksPlaceholder />
         </div>

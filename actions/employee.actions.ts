@@ -14,6 +14,7 @@ import {
   createEmployeeSchema,
   employeeSearchSchema,
   updateEmployeeSchema,
+  updateMyProfileSchema,
 } from "@/lib/validation/employee";
 
 async function requestMeta() {
@@ -76,6 +77,36 @@ export async function updateEmployeeAction(
 
   revalidatePath("/admin/employees");
   redirect("/admin/employees");
+}
+
+export interface UpdateMyProfileFormState {
+  error?: string;
+  success?: boolean;
+}
+
+export async function getMyProfileAction() {
+  const session = await requireSession();
+  return employeeService.getMyProfile(session);
+}
+
+export async function updateMyProfileAction(
+  _prevState: UpdateMyProfileFormState,
+  formData: FormData,
+): Promise<UpdateMyProfileFormState> {
+  const parsed = updateMyProfileSchema.safeParse(formDataToRecord(formData));
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    await employeeService.updateMyProfile(parsed.data, session, meta);
+  } catch (err) {
+    return { error: toUserMessage(err, "Failed to update profile") };
+  }
+
+  revalidatePath("/profile");
+  revalidatePath("/dashboard");
+  return { success: true };
 }
 
 export async function deactivateEmployeeAction(employeeId: string): Promise<{ success: boolean; error?: string }> {

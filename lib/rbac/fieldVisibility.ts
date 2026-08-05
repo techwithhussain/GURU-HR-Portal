@@ -22,6 +22,7 @@ export function employeeSelect(session: SessionContext) {
     shiftId: true,
     managerId: true,
     joiningDate: true,
+    dateOfBirth: true,
     salary: canViewSalary,
     salaryType: canViewSalary,
     allowances: canViewSalary,

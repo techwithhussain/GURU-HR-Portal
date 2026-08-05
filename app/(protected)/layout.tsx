@@ -9,6 +9,7 @@ import {
   Home,
   LayoutDashboard,
   Plane,
+  Send,
   Settings,
   ShieldCheck,
   User,
@@ -22,6 +23,8 @@ import { getMyDashboardProfile } from "@/services/dashboardService";
 import { getCompanyTimezone } from "@/services/reportsService";
 import { NotificationBell } from "@/features/notifications/NotificationBell";
 import { BreakAlertListener } from "@/features/notifications/BreakAlertListener";
+import { ShiftEndReminder } from "@/features/shell/ShiftEndReminder";
+import { NotificationPopupListener } from "@/features/shell/NotificationPopupListener";
 import { SidebarNav, type SidebarLink } from "@/features/shell/SidebarNav";
 import { LiveClock } from "@/features/shell/LiveClock";
 import { UserMenu } from "@/features/shell/UserMenu";
@@ -35,7 +38,7 @@ const EMPLOYEE_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/documents", label: "Documents", icon: Folder },
   { href: "/coming-soon?feature=Holidays", label: "Holidays", icon: CalendarDays },
   { href: "/notifications", label: "Notifications", icon: Bell },
-  { href: "/coming-soon?feature=Profile", label: "Profile", icon: User },
+  { href: "/profile", label: "Profile", icon: User },
   { href: "/change-password", label: "Settings", icon: Settings },
 ];
 
@@ -45,6 +48,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/admin/shifts", label: "Shifts", icon: Clock },
   { href: "/reports", label: "Reports", icon: FileBarChart2 },
   { href: "/admin/leave", label: "Leave Management", icon: ShieldCheck },
+  { href: "/admin/notifications/send", label: "Send Notification", icon: Send },
   { href: "/coming-soon?feature=Salary+Slip", label: "Salary Slip", icon: Wallet },
   { href: "/admin/settings", label: "Company Settings", icon: Settings },
   { href: "/notifications", label: "Notifications", icon: Bell },
@@ -74,6 +78,8 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-full">
       {isAdmin && <BreakAlertListener />}
+      {!isAdmin && session.employeeId && <ShiftEndReminder />}
+      <NotificationPopupListener />
       <aside className="flex w-64 shrink-0 flex-col bg-gradient-to-b from-sidebar to-brand-navy-soft text-sidebar-foreground">
         <div className="flex items-center gap-2.5 px-5 py-6">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-white/10 p-1.5 ring-1 ring-white/10">
@@ -125,7 +131,11 @@ export default async function ProtectedLayout({ children }: { children: React.Re
             <LiveClock timezone={timezone} />
             <div className="h-8 w-px bg-border" />
             <NotificationBell initialUnreadCount={unreadCount} />
-            <UserMenu fullName={fullName} employeeCode={session.employeeCode} roleName={session.roleName} />
+            <UserMenu
+              fullName={fullName}
+              employeeCode={session.employeeCode}
+              roleName={session.roleName}
+            />
           </div>
         </header>
         <main className="bg-app-canvas flex min-w-0 flex-1 flex-col p-6">{children}</main>

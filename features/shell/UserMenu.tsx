@@ -31,9 +31,9 @@ export function UserMenu({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 outline-none transition-colors hover:bg-muted">
-        <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-orange to-brand-orange-light text-xs font-semibold text-white shadow-soft ring-2 ring-white">
-          {initials(fullName)}
-        </div>
+          <div className="flex size-9 items-center justify-center rounded-full bg-gradient-to-br from-brand-orange to-brand-orange-light text-xs font-semibold text-white shadow-soft ring-2 ring-white">
+            {initials(fullName)}
+          </div>
         <div className="hidden flex-col items-start leading-tight md:flex">
           <span className="text-sm font-medium">{fullName}</span>
           <span className="text-xs text-muted-foreground">{roleName}</span>
