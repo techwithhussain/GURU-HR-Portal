@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -37,6 +38,32 @@ const TYPE_ICON: Record<string, string> = {
   BIRTHDAY_REMINDER: "🎂",
 };
 
+/** Navigate destination per notification type */
+function getNotificationLink(type: string, isAdmin: boolean): string {
+  switch (type) {
+    case "LEAVE_APPLIED":
+      return isAdmin ? "/admin/leave" : "/leave";
+    case "LEAVE_APPROVED":
+    case "LEAVE_REJECTED":
+    case "LEAVE_CANCELLED":
+      return "/leave";
+    case "LATE_CHECK_IN":
+    case "MISSED_CHECKOUT_AUTO_CLOSE":
+      return "/reports";
+    case "BREAK_LIMIT_EXCEEDED":
+      return isAdmin ? "/admin/dashboard" : "/dashboard";
+    case "ADMIN_ANNOUNCEMENT":
+      return "/dashboard";
+    case "BIRTHDAY_REMINDER":
+      return "/dashboard";
+    case "ACCOUNT_LOCKED":
+    case "FORCED_LOGOUT":
+      return "/notifications";
+    default:
+      return "/notifications";
+  }
+}
+
 /** "2h ago", "just now", "3d ago" */
 function timeAgo(date: Date | string): string {
   const diff = Date.now() - new Date(date).getTime();
@@ -49,10 +76,18 @@ function timeAgo(date: Date | string): string {
   return `${days}d ago`;
 }
 
-export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: number }) {
+export function NotificationBell({
+  initialUnreadCount,
+  isAdmin = false,
+}: {
+  initialUnreadCount: number;
+  isAdmin?: boolean;
+}) {
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
   const [notifications, setNotifications] = useState<NotificationRow[] | null>(null);
+  const [open, setOpen] = useState(false);
 
   function loadNotifications() {
     startTransition(async () => {
@@ -63,14 +98,19 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
   }
 
   function handleItemClick(n: NotificationRow) {
-    if (n.readAt) return;
-    startTransition(async () => {
-      await markAsReadAction(n.id);
-      setNotifications((prev) =>
-        prev ? prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date() } : x)) : prev,
-      );
-      setUnreadCount((c) => Math.max(0, c - 1));
-    });
+    const href = getNotificationLink(n.type, isAdmin);
+    // Mark as read if unread, then navigate
+    if (!n.readAt) {
+      startTransition(async () => {
+        await markAsReadAction(n.id);
+        setNotifications((prev) =>
+          prev ? prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date() } : x)) : prev,
+        );
+        setUnreadCount((c) => Math.max(0, c - 1));
+      });
+    }
+    setOpen(false);
+    router.push(href);
   }
 
   function handleMarkAllRead() {
@@ -84,7 +124,13 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
   }
 
   return (
-    <DropdownMenu onOpenChange={(open) => open && loadNotifications()}>
+    <DropdownMenu
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) loadNotifications();
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative">
           <Bell className="size-4" />
@@ -140,7 +186,9 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
                 e.preventDefault();
                 handleItemClick(n);
               }}
-              className={`flex items-start gap-3 px-3 py-2.5 ${isUnread ? "bg-brand-orange/5" : ""}`}
+              className={`flex cursor-pointer items-start gap-3 px-3 py-2.5 transition-colors hover:bg-muted/60 ${
+                isUnread ? "bg-brand-orange/5" : ""
+              }`}
             >
               {/* Emoji icon */}
               <span className="mt-0.5 shrink-0 text-base">{icon}</span>
@@ -148,15 +196,21 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
               {/* Content */}
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className={`text-sm ${isUnread ? "font-semibold text-foreground" : "font-medium text-muted-foreground"}`}>
+                  <span
+                    className={`text-sm ${
+                      isUnread ? "font-semibold text-foreground" : "font-medium text-muted-foreground"
+                    }`}
+                  >
                     {label}
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
                     {timeAgo(n.createdAt)}
                   </span>
                 </div>
-                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
-                  {detail}
+                <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{detail}</p>
+                {/* Clickable hint */}
+                <p className="mt-1 text-[10px] font-medium text-brand-blue/70">
+                  Click to open →
                 </p>
               </div>
 
@@ -170,7 +224,11 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
 
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/notifications" className="justify-center text-xs text-muted-foreground">
+          <Link
+            href="/notifications"
+            className="justify-center text-xs text-muted-foreground"
+            onClick={() => setOpen(false)}
+          >
             View all notifications →
           </Link>
         </DropdownMenuItem>

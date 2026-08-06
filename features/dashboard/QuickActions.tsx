@@ -44,10 +44,9 @@ const ACTIONS: QuickAction[] = [
   {
     icon: Ticket,
     label: "Raise Ticket",
-    href: "/coming-soon?feature=Raise+Ticket",
+    href: "/ticket",
     gradient: "from-rose-500 to-rose-600",
     glow: "hover:shadow-rose-500/30",
-    disabled: true,
   },
   {
     icon: UserCog,

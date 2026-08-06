@@ -13,6 +13,7 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  Ticket,
   User,
   Users,
   Wallet,
@@ -35,6 +36,7 @@ const EMPLOYEE_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
   { href: "/reports", label: "Attendance History", icon: FileBarChart2 },
   { href: "/leave", label: "My Leave", icon: Plane },
+  { href: "/ticket", label: "Raise Ticket", icon: Ticket },
   { href: "/coming-soon?feature=Salary+Slip", label: "Salary Slip", icon: Wallet },
   { href: "/documents", label: "Documents", icon: Folder },
   { href: "/coming-soon?feature=Holidays", label: "Holidays", icon: CalendarDays },
@@ -49,6 +51,7 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/admin/shifts", label: "Shifts", icon: Clock },
   { href: "/reports", label: "Reports", icon: FileBarChart2 },
   { href: "/admin/leave", label: "Leave Management", icon: ShieldCheck },
+  { href: "/admin/tickets", label: "Support Tickets", icon: Ticket },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/notifications/send", label: "Send Notification", icon: Send },
   { href: "/coming-soon?feature=Salary+Slip", label: "Salary Slip", icon: Wallet },
@@ -132,7 +135,7 @@ export default async function ProtectedLayout({ children }: { children: React.Re
           <div className="flex items-center gap-3">
             <LiveClock timezone={timezone} />
             <div className="h-8 w-px bg-border" />
-            <NotificationBell initialUnreadCount={unreadCount} />
+            <NotificationBell initialUnreadCount={unreadCount} isAdmin={isAdmin} />
             <UserMenu
               fullName={fullName}
               employeeCode={session.employeeCode}

@@ -179,6 +179,7 @@ model Employee {
   leaves         Leave[]
   leaveBalances  LeaveBalance[]
   documentFiles  EmployeeDocument[]
+  tickets        Ticket[]
 
   @@index([departmentId])
   @@index([status])
@@ -467,4 +468,42 @@ model Announcement {
 
   @@index([createdAt])
   @@map("announcements")
+}
+
+// ---------------------------------------------------------------------------
+// Support Tickets
+// ---------------------------------------------------------------------------
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Ticket {
+  id          String         @id @default(cuid())
+  title       String
+  description String
+  category    String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  adminReply  String?
+  resolvedAt  DateTime?
+  employeeId  String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("tickets")
 }
