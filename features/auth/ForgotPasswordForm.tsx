@@ -13,10 +13,13 @@ export function ForgotPasswordForm() {
 
   if (state.submitted) {
     return (
-      <p className="text-sm text-muted-foreground">
-        If that account exists, a reset link has been generated. Email delivery isn&apos;t wired up
-        in this environment yet — check with your administrator for the link.
-      </p>
+      <div className="space-y-2 text-center">
+        <p className="text-sm font-medium">Check your email 📧</p>
+        <p className="text-sm text-muted-foreground">
+          If an account with that Employee ID or email exists, a password reset link has been sent.
+          The link is valid for <strong>30 minutes</strong>.
+        </p>
+      </div>
     );
   }
 

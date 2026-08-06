@@ -156,7 +156,7 @@ async function recordFailedAttempt(
     });
     const payload = { lockedUserId: user.id, attempts: nextAttempts };
     await notifyUser(user.id, "ACCOUNT_LOCKED", payload, {
-      subject: "Your GDA EMS account has been locked",
+      subject: "Your GDA MIS account has been locked",
       text: `Your account was locked after ${nextAttempts} failed login attempts. It will unlock automatically after ${env.ACCOUNT_LOCKOUT_DURATION_MINUTES} minutes.`,
     });
     await notifyUsers(
@@ -252,7 +252,7 @@ export async function requestPasswordReset(
   const resetLink = `${env.APP_URL}/reset-password/${rawToken}`;
   await sendMail({
     to: user.email,
-    subject: "Reset your GDA EMS password",
+    subject: "Reset your GDA MIS password",
     text: `Use this link to reset your password (valid for 30 minutes):\n\n${resetLink}`,
   });
 
@@ -344,7 +344,7 @@ export async function adminResetPassword(
 
   await sendMail({
     to: user.email,
-    subject: "Your GDA EMS password has been reset",
+    subject: "Your GDA MIS password has been reset",
     text: `An administrator has reset your password. Your new temporary password is: ${tempPassword}\n\nYou will be asked to change it on your next login.`,
   });
 

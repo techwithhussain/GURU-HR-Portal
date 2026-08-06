@@ -1,6 +1,8 @@
 "use server";
 
 import * as dashboardService from "@/services/dashboardService";
+import * as birthdayService from "@/services/birthdayService";
+import { getCompanyTimezone } from "@/services/reportsService";
 import { requireSession } from "@/services/sessionService";
 
 export async function getDashboardSummaryAction() {
@@ -41,4 +43,10 @@ export async function getShiftBreakdownAction() {
 export async function getEmployeesWorkingAction() {
   const session = await requireSession();
   return dashboardService.getEmployeesWorking(session);
+}
+
+export async function getBirthdayCalendarAction(year: number, month: number) {
+  await requireSession();
+  const timezone = await getCompanyTimezone();
+  return birthdayService.getBirthdaysForMonth(month, year, timezone);
 }

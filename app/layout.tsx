@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GDA EMS",
-  description: "Guru Digital Advertising — Employee Management System",
+  title: "GDA MIS",
+  description: "Guru Digital Advertising — Management Information System",
 };
 
 export default function RootLayout({

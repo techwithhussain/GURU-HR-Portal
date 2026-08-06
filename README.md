@@ -1,4 +1,4 @@
-GDA EMS — HR portal for Guru Digital Advertising, built with Next.js, Prisma, and Postgres.
+GDA MIS — HR portal for Guru Digital Advertising, built with Next.js, Prisma, and Postgres.
 
 ## Getting Started (new machine)
 

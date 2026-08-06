@@ -4,8 +4,9 @@ import { useEffect, useState, useTransition } from "react";
 import { ChevronLeft, ChevronRight, CalendarRange } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getMyAttendanceCalendarAction } from "@/actions/dashboard.actions";
+import { getMyAttendanceCalendarAction, getBirthdayCalendarAction } from "@/actions/dashboard.actions";
 import type { MyCalendarDay } from "@/services/dashboardService";
+import type { MonthBirthday } from "@/services/birthdayService";
 
 const STATUS_STYLE: Record<string, { cell: string; dot: string }> = {
   PRESENT: { cell: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
@@ -30,12 +31,17 @@ export function AttendanceCalendar() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1); // 1-12
   const [days, setDays] = useState<MyCalendarDay[]>([]);
+  const [birthdays, setBirthdays] = useState<MonthBirthday[]>([]);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     startTransition(async () => {
-      const result = await getMyAttendanceCalendarAction(year, month);
-      setDays(result);
+      const [attendanceResult, birthdayResult] = await Promise.all([
+        getMyAttendanceCalendarAction(year, month),
+        getBirthdayCalendarAction(year, month),
+      ]);
+      setDays(attendanceResult);
+      setBirthdays(birthdayResult);
     });
   }, [year, month]);
 
@@ -43,6 +49,14 @@ export function AttendanceCalendar() {
     const d = new Date(year, month - 1 + delta, 1);
     setYear(d.getFullYear());
     setMonth(d.getMonth() + 1);
+  }
+
+  // Build a map: day → birthday names for tooltip
+  const birthdayMap = new Map<number, string[]>();
+  for (const b of birthdays) {
+    const names = birthdayMap.get(b.day) ?? [];
+    names.push(b.fullName);
+    birthdayMap.set(b.day, names);
   }
 
   const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
@@ -88,17 +102,35 @@ export function AttendanceCalendar() {
               const dayNum = Number(day.date.slice(-2));
               const isToday = day.date === todayKey;
               const style = day.status ? STATUS_STYLE[day.status] : undefined;
+              const bdNames = birthdayMap.get(dayNum);
+              const hasBirthday = !!bdNames && bdNames.length > 0;
+              const tooltipTitle = hasBirthday
+                ? `🎂 ${bdNames!.join(", ")}`
+                : undefined;
+
               return (
                 <div
                   key={day.date}
+                  title={tooltipTitle}
                   className={`flex aspect-square flex-col items-center justify-center gap-0.5 rounded-lg text-xs transition-colors ${
                     isToday
                       ? "bg-gradient-to-br from-brand-orange to-brand-orange-light font-bold text-white shadow-soft"
+                      : hasBirthday
+                      ? `${style?.cell ?? "bg-pink-50 text-pink-700"} font-medium ring-1 ring-pink-300/50`
                       : `${style?.cell ?? "text-foreground hover:bg-muted"} font-medium`
                   }`}
                 >
                   <span>{dayNum}</span>
-                  {day.status && !isToday && <span className={`size-1 rounded-full ${style?.dot}`} />}
+                  {!isToday && (
+                    <span className="flex items-center gap-0.5">
+                      {day.status && (
+                        <span className={`size-1 rounded-full ${style?.dot}`} />
+                      )}
+                      {hasBirthday && (
+                        <span className="text-[7px] leading-none">🎂</span>
+                      )}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -114,6 +146,11 @@ export function AttendanceCalendar() {
                 {l.label}
               </span>
             ))}
+            {/* Birthday legend */}
+            <span className="flex items-center gap-1 rounded-full bg-muted/60 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span className="text-[9px] leading-none">🎂</span>
+              Birthday
+            </span>
           </div>
         </div>
       </CardContent>

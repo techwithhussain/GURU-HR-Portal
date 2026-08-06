@@ -21,7 +21,7 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
-  SMTP_FROM: z.string().default("GDA EMS <no-reply@gurudigitaladvertising.com>"),
+  SMTP_FROM: z.string().default("GDA MIS <no-reply@gurudigitaladvertising.com>"),
 });
 
 const parsed = envSchema.safeParse(process.env);

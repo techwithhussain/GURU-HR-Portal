@@ -10,6 +10,14 @@ export interface UpcomingBirthday {
   daysUntil: number; // 0 = today, 1 = tomorrow
 }
 
+export interface MonthBirthday {
+  id: string;
+  day: number;
+  fullName: string;
+  departmentName: string | null;
+  daysUntil: number; // negative = already passed this month
+}
+
 /** Returns today's date parts in the given timezone */
 function todayParts(timezone: string): { month: number; day: number; dateStr: string } {
   const fmt = new Intl.DateTimeFormat("en-US", {
@@ -70,6 +78,58 @@ export async function getUpcomingBirthdays(
   }
 
   return upcoming.sort((a, b) => a.daysUntil - b.daysUntil);
+}
+
+/**
+ * Returns all employees with a birthday in the given month/year,
+ * sorted by day. daysUntil is relative to today (negative = already passed).
+ */
+export async function getBirthdaysForMonth(
+  month: number,
+  year: number,
+  timezone: string,
+): Promise<MonthBirthday[]> {
+  const { dateStr } = todayParts(timezone);
+  const todayDate = new Date(dateStr);
+
+  const employees = await prisma.employee.findMany({
+    where: {
+      deletedAt: null,
+      status: "ACTIVE",
+      dateOfBirth: { not: null },
+    },
+    select: {
+      id: true,
+      fullName: true,
+      dateOfBirth: true,
+      department: { select: { name: true } },
+    },
+  });
+
+  const result: MonthBirthday[] = [];
+
+  for (const emp of employees) {
+    if (!emp.dateOfBirth) continue;
+    const dob = new Date(emp.dateOfBirth);
+    const dobMonth = dob.getMonth() + 1;
+    const dobDay = dob.getDate();
+
+    if (dobMonth !== month) continue;
+
+    const birthdayThisYear = new Date(year, month - 1, dobDay);
+    const diffMs = birthdayThisYear.getTime() - todayDate.getTime();
+    const daysUntil = Math.round(diffMs / (1000 * 60 * 60 * 24));
+
+    result.push({
+      id: emp.id,
+      day: dobDay,
+      fullName: emp.fullName,
+      departmentName: emp.department?.name ?? null,
+      daysUntil,
+    });
+  }
+
+  return result.sort((a, b) => a.day - b.day);
 }
 
 /**

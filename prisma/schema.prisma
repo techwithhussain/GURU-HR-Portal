@@ -84,6 +84,7 @@ model User {
   approvedLeaves  Leave[]        @relation("LeaveApprover")
   cancelledLeaves Leave[]        @relation("LeaveCancelledBy")
   uploadedDocuments EmployeeDocument[]
+  announcements  Announcement[]
 
   @@map("users")
 }
@@ -446,4 +447,24 @@ model CompanySetting {
   updatedAt           DateTime @updatedAt
 
   @@map("company_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Announcements
+// ---------------------------------------------------------------------------
+
+model Announcement {
+  id        String    @id @default(cuid())
+  title     String
+  body      String
+  isPinned  Boolean   @default(false)
+  expiresAt DateTime?
+  authorId  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([createdAt])
+  @@map("announcements")
 }
