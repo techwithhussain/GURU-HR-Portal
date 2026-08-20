@@ -50,6 +50,7 @@ next-env.d.ts
 agent/build/
 agent/dist/
 agent/*.spec
+whatsapp-auth/
 
 
 /lib/prisma-client
