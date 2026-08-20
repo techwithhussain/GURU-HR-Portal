@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Users, UserCheck, UserX, Palmtree, CheckCircle2, XCircle, UserPlus } from "lucide-react";
 import {
   getEmployeeManagementStatsAction,
@@ -44,7 +44,7 @@ export default async function EmployeesPage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   const params = await searchParams;
   const canViewSalary = hasPermission(session, "salary.view");
@@ -115,7 +115,7 @@ export default async function EmployeesPage({
       <form method="get" className="flex flex-wrap items-end gap-3">
         <div className="space-y-2">
           <Label htmlFor="query">Search</Label>
-          <Input id="query" name="query" placeholder="Name, ID, email, phone…" defaultValue={params.query ?? ""} className="w-56" />
+          <Input id="query" name="query" placeholder="Name, ID, email, phone..." defaultValue={params.query ?? ""} className="w-56" />
         </div>
         <div className="space-y-2">
           <Label htmlFor="departmentId">Department</Label>
@@ -227,7 +227,7 @@ export default async function EmployeesPage({
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {total} employee{total === 1 ? "" : "s"} — page {page} of {totalPages}
+          {total} employee{total === 1 ? "" : "s"} - page {page} of {totalPages}
         </p>
         <Pagination page={page} totalPages={totalPages} buildHref={buildHref} />
       </div>

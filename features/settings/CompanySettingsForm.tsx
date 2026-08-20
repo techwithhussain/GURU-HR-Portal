@@ -60,6 +60,16 @@ export function CompanySettingsForm({ settings }: { settings: CompanySetting | n
     const start = String(formData.get("officeHoursStart") ?? "");
     const end = String(formData.get("officeHoursEnd") ?? "");
 
+    const pcAssignmentsRaw = String(formData.get("pcAssignments") ?? "")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const pcAssignments: Record<string, string> = {};
+    for (const line of pcAssignmentsRaw) {
+      const [pc, emp] = line.split("=").map((s) => s.trim());
+      if (pc && emp) pcAssignments[pc] = emp;
+    }
+
     const payload = {
       name: String(formData.get("name") ?? ""),
       timezone: String(formData.get("timezone") ?? ""),
@@ -67,6 +77,8 @@ export function CompanySettingsForm({ settings }: { settings: CompanySetting | n
       officeHours: start && end ? { start, end } : undefined,
       holidayCalendar,
       maxConcurrentBreaks: Number(formData.get("maxConcurrentBreaks") ?? 3),
+      inactivityThresholdMinutes: Number(formData.get("inactivityThresholdMinutes") ?? 20),
+      pcAssignments,
     };
 
     setError(null);
@@ -133,6 +145,23 @@ export function CompanySettingsForm({ settings }: { settings: CompanySetting | n
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor="inactivityThresholdMinutes">Inactivity threshold (minutes)</Label>
+        <p className="text-xs text-muted-foreground">
+          Desktop agent will report an employee as inactive after this many minutes without mouse/keyboard activity.
+        </p>
+        <Input
+          id="inactivityThresholdMinutes"
+          name="inactivityThresholdMinutes"
+          type="number"
+          min={1}
+          max={480}
+          defaultValue={settings?.inactivityThresholdMinutes ?? 20}
+          className="w-32"
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
         <Label htmlFor="holidayCalendar">Holiday calendar (one per line: YYYY-MM-DD,Label)</Label>
         <textarea
           id="holidayCalendar"
@@ -141,6 +170,23 @@ export function CompanySettingsForm({ settings }: { settings: CompanySetting | n
           defaultValue={readHolidayCalendar(settings?.holidayCalendar)}
           placeholder="2026-01-26,Republic Day"
           className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="pcAssignments">PC Assignments (one per line: HOSTNAME=EmployeeID)</Label>
+        <p className="text-xs text-muted-foreground">
+          Map each PC hostname to its employee. Agent log file shows hostname. Example: <code>DESKTOP-HRQ6E0T=GDA0037</code>
+        </p>
+        <textarea
+          id="pcAssignments"
+          name="pcAssignments"
+          rows={5}
+          defaultValue={Object.entries(
+            (settings?.pcAssignments as Record<string, string> | null) ?? {}
+          ).map(([k, v]) => `${k}=${v}`).join("\n")}
+          placeholder={"DESKTOP-HRQ6E0T=GDA0037\nPC-SALES-01=GDA0042"}
+          className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm font-mono shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
       </div>
 

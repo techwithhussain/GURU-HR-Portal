@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { notFound } from "next/navigation";
 import { Send } from "lucide-react";
 import { listDepartments, listEmployees } from "@/services/orgService";
 import { getSessionContext } from "@/services/sessionService";
@@ -7,7 +7,7 @@ import { SendAnnouncementForm } from "@/features/notifications/SendAnnouncementF
 
 export default async function SendNotificationPage() {
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   const [departments, employees] = await Promise.all([listDepartments(), listEmployees()]);
 

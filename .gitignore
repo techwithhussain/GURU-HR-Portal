@@ -43,6 +43,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# archives and binaries
+*.zip
+*.exe
+*.pdf
+agent/build/
+agent/dist/
+agent/*.spec
+
+
 /lib/prisma-client
 
 # claude code local settings

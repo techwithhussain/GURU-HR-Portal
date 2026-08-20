@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { DateTime } from "luxon";
 import {
   ArrowLeft,
@@ -89,7 +89,7 @@ function formatDateTime(iso: string): string {
 export default async function EmployeeProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   const timezone = await getCompanyTimezone();
 

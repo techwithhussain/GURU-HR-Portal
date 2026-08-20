@@ -20,6 +20,7 @@ export interface SendMailInput {
   to: string;
   subject: string;
   text: string;
+  html?: string;
 }
 
 export async function sendMail(input: SendMailInput): Promise<void> {
@@ -28,13 +29,18 @@ export async function sendMail(input: SendMailInput): Promise<void> {
     return;
   }
 
-  const info = await getTransporter().sendMail({
-    from: env.SMTP_FROM,
-    to: input.to,
-    subject: input.subject,
-    text: input.text,
-  });
+  try {
+    const info = await getTransporter().sendMail({
+      from: env.SMTP_FROM || `"Guru Digital Advertising" <no-reply@gurudigitaladvertising.com>`,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html,
+    });
 
-  const previewUrl = nodemailer.getTestMessageUrl(info);
-  if (previewUrl) console.log(`[mailer] Preview: ${previewUrl}`);
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    if (previewUrl) console.log(`[mailer] Preview: ${previewUrl}`);
+  } catch (err) {
+    console.error(`[mailer] Failed to send email to ${input.to}:`, err);
+  }
 }

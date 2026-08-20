@@ -14,6 +14,9 @@ const envSchema = z.object({
   CRON_SECRET: z.string().min(16),
   TV_DISPLAY_TOKEN: z.string().min(16),
   APP_URL: z.url().default("http://localhost:3000"),
+  // Desktop activity agent
+  AGENT_API_KEY: z.string().min(16).default("change-me-in-production-agent-key"),
+  INACTIVITY_THRESHOLD_MINUTES: z.coerce.number().int().min(1).default(20),
 
   // Email (SMTP) — all optional; unset SMTP_HOST means the mailer falls back
   // to a console-log dev preview instead of sending real email.

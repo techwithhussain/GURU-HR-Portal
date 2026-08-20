@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ArrowLeft, Briefcase, Calendar, IdCard, Mail, Phone } from "lucide-react";
 import { getSessionContext } from "@/services/sessionService";
 import { getLeaveDetailAction } from "@/actions/leave.actions";
@@ -41,7 +41,7 @@ function formatDateTime(iso: string): string {
 export default async function LeaveDetailPage({ params }: { params: Promise<{ leaveId: string }> }) {
   const { leaveId } = await params;
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   let detail;
   try {

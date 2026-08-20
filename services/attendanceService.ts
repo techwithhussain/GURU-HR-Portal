@@ -20,6 +20,10 @@ import {
 } from "@/lib/attendance/calculations";
 import type { CorrectAttendanceInput, CorrectBreakInput } from "@/lib/validation/attendance";
 import { notifyUsers } from "@/services/notificationService";
+import {
+  renderLateClockInEmail,
+  renderMissedClockOutEmail,
+} from "@/lib/email/attendanceEmailTemplates";
 
 // Mirrors features/attendance/BreakSelectDialog.tsx's per-type suggested
 // durations — duplicated here (not imported) since that file is a "use
@@ -171,15 +175,25 @@ export async function checkIn(employeeId: string, actor: SessionContext, meta: R
       if (employeeWithManager) {
         const recipientUserIds = [employeeWithManager.userId];
         if (employeeWithManager.manager) recipientUserIds.push(employeeWithManager.manager.userId);
-        await notifyUsers(
+
+        const dateStr = DateTime.fromJSDate(now, { zone: timezone }).toFormat("dd LLLL yyyy");
+        const shiftStartFmt = shiftStart.setZone(timezone).toFormat("hh:mm a");
+        const clockInFmt = DateTime.fromJSDate(now, { zone: timezone }).toFormat("hh:mm a");
+
+        const emailData = renderLateClockInEmail({
+          employeeName: employeeWithManager.fullName,
+          date: dateStr,
+          shiftStartTime: shiftStartFmt,
+          clockInTime: clockInFmt,
+          lateMinutes,
+        });
+
+        notifyUsers(
           recipientUserIds,
           "LATE_CHECK_IN",
           { attendanceId: attendance.id, lateMinutes },
-          {
-            subject: `Late login — ${employeeWithManager.fullName}`,
-            text: `${employeeWithManager.fullName} logged in ${lateMinutes} minute(s) late today.`,
-          },
-        );
+          emailData,
+        ).catch((err) => console.error("[attendanceService] Late login email dispatch failed:", err));
       }
     }
 
@@ -638,15 +652,24 @@ export async function autoCloseStaleAttendance(): Promise<{ closedCount: number 
         select: { fullName: true, userId: true },
       });
       if (employee) {
-        const dateStr = row.attendanceDate.toISOString().slice(0, 10);
+        const dateStr = DateTime.fromJSDate(row.attendanceDate, { zone: timezone }).toFormat("dd LLLL yyyy");
+        const shiftEndFmt = DateTime.fromJSDate(scheduledEnd, { zone: timezone }).toFormat("hh:mm a");
+        const clockInFmt = row.checkInAt
+          ? DateTime.fromJSDate(row.checkInAt, { zone: timezone }).toFormat("hh:mm a")
+          : "N/A";
+
+        const emailData = renderMissedClockOutEmail({
+          employeeName: employee.fullName,
+          date: dateStr,
+          shiftEndTime: shiftEndFmt,
+          clockInTime: clockInFmt,
+        });
+
         await notifyUsers(
           [employee.userId, ...adminIds],
           "MISSED_CHECKOUT_AUTO_CLOSE",
           { attendanceId: row.id, attendanceDate: row.attendanceDate.toISOString() },
-          {
-            subject: `Missed logout — ${employee.fullName}`,
-            text: `${employee.fullName} did not log out on ${dateStr}. The system auto-closed that day's attendance at shift end.`,
-          },
+          emailData,
         );
       }
 
@@ -1037,3 +1060,158 @@ export async function toggleWeeklyOff(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Overtime Session — voluntary post-shift extra work
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns today's overtime session state for the given employee.
+ * Used by the dashboard to decide which overtime UI to show.
+ */
+export async function getOvertimeStatus(employeeId: string) {
+  const timezone = await getCompanyTimezone();
+  const today = attendanceDateForCheckIn(new Date(), timezone);
+
+  const todayAttendance = await prisma.attendance.findFirst({
+    where: { employeeId, attendanceDate: today },
+    include: { shift: true },
+  });
+
+  // No attendance today → no overtime possible
+  if (!todayAttendance || !todayAttendance.checkInAt) {
+    return { state: "NO_ATTENDANCE" as const };
+  }
+
+  // Shift must have ended (checkOutAt set) before overtime is offered
+  if (!todayAttendance.checkOutAt) {
+    return { state: "SHIFT_ACTIVE" as const };
+  }
+
+  // Check whether shift end time has actually passed
+  const shiftTiming = toShiftTiming(todayAttendance.shift);
+  const shiftEnd = shiftEndInstant(todayAttendance.attendanceDate, shiftTiming, timezone);
+  const nowDt = DateTime.now().setZone("utc");
+  if (nowDt < shiftEnd) {
+    return { state: "SHIFT_ACTIVE" as const };
+  }
+
+  // Look for an overtime session today
+  const session = await prisma.overtimeSession.findFirst({
+    where: { employeeId, attendanceId: todayAttendance.id },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (!session) {
+    return {
+      state: "AVAILABLE" as const,
+      attendanceId: todayAttendance.id,
+      shiftEndAt: shiftEnd.toJSDate().toISOString(),
+    };
+  }
+
+  if (session.status === "ACTIVE") {
+    return {
+      state: "ACTIVE" as const,
+      session: {
+        id: session.id,
+        startAt: session.startAt.toISOString(),
+        durationMin: session.durationMin,
+      },
+      attendanceId: todayAttendance.id,
+    };
+  }
+
+  return {
+    state: "COMPLETED" as const,
+    session: {
+      id: session.id,
+      startAt: session.startAt.toISOString(),
+      endAt: session.endAt?.toISOString() ?? null,
+      durationMin: session.durationMin,
+    },
+  };
+}
+
+export type OvertimeStatusResult = Awaited<ReturnType<typeof getOvertimeStatus>>;
+
+export async function startOvertimeSession(employeeId: string, actor: SessionContext) {
+  requirePermission(actor, "attendance.self");
+
+  const timezone = await getCompanyTimezone();
+  const today = attendanceDateForCheckIn(new Date(), timezone);
+
+  // Must have a completed attendance record for today
+  const todayAttendance = await prisma.attendance.findFirst({
+    where: { employeeId, attendanceDate: today, checkOutAt: { not: null } },
+    include: { shift: true },
+  });
+  if (!todayAttendance) {
+    throw new ConflictError(
+      "No completed attendance record found for today. Log out of your shift before starting overtime.",
+    );
+  }
+
+  // Shift end must have passed
+  const shiftTiming = toShiftTiming(todayAttendance.shift);
+  const shiftEnd = shiftEndInstant(todayAttendance.attendanceDate, shiftTiming, timezone);
+  if (DateTime.now().setZone("utc") < shiftEnd) {
+    throw new ConflictError("Your shift has not ended yet. Overtime can only be started after your shift ends.");
+  }
+
+  // No active session already running
+  const existing = await prisma.overtimeSession.findFirst({
+    where: { employeeId, attendanceId: todayAttendance.id, status: "ACTIVE" },
+  });
+  if (existing) {
+    throw new ConflictError("An overtime session is already running.");
+  }
+
+  const session = await prisma.overtimeSession.create({
+    data: {
+      employeeId,
+      attendanceId: todayAttendance.id,
+      startAt: new Date(),
+      status: "ACTIVE",
+    },
+  });
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "overtime.started",
+    targetEntity: "overtime_session",
+    targetId: session.id,
+    metadata: { attendanceId: todayAttendance.id },
+  });
+
+  return session;
+}
+
+export async function endOvertimeSession(employeeId: string, actor: SessionContext) {
+  requirePermission(actor, "attendance.self");
+
+  const activeSession = await prisma.overtimeSession.findFirst({
+    where: { employeeId, status: "ACTIVE" },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!activeSession) {
+    throw new ConflictError("No active overtime session found.");
+  }
+
+  const now = new Date();
+  const durationMin = Math.max(1, Math.round((now.getTime() - activeSession.startAt.getTime()) / 60_000));
+
+  const updated = await prisma.overtimeSession.update({
+    where: { id: activeSession.id },
+    data: { endAt: now, durationMin, status: "COMPLETED" },
+  });
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "overtime.ended",
+    targetEntity: "overtime_session",
+    targetId: activeSession.id,
+    metadata: { durationMin },
+  });
+
+  return updated;
+}

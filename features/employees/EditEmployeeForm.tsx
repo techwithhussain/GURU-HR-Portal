@@ -48,7 +48,12 @@ export function EditEmployeeForm({
     allowances?: unknown;
     deductions?: unknown;
     emergencyContact: string | null;
+    panNumber?: string | null;
+    aadhaarNumber?: string | null;
+    bankAccount?: string | null;
+    bankName?: string | null;
     dateOfBirth: Date | string | null;
+    windowsUsername: string | null;
     user: { roleId: string };
   };
   departments: Option[];
@@ -216,6 +221,49 @@ export function EditEmployeeForm({
       <div className="space-y-2">
         <Label htmlFor="emergencyContact">Emergency contact</Label>
         <Input id="emergencyContact" name="emergencyContact" defaultValue={employee.emergencyContact ?? ""} />
+      </div>
+
+      {/* Financial & Statutory Details */}
+      <div className="border-t border-border pt-4 mt-2 space-y-3">
+        <h3 className="text-sm font-bold text-foreground">Financial & Statutory Details (Secure)</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="panNumber">PAN Number</Label>
+            <Input
+              id="panNumber"
+              name="panNumber"
+              placeholder="e.g. ABCDE1234F"
+              defaultValue={employee.panNumber ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="aadhaarNumber">Aadhaar Number</Label>
+            <Input
+              id="aadhaarNumber"
+              name="aadhaarNumber"
+              placeholder="e.g. 1234 5678 9012"
+              defaultValue={employee.aadhaarNumber ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bankAccount">Bank Account Number</Label>
+            <Input
+              id="bankAccount"
+              name="bankAccount"
+              placeholder="e.g. 123456789012"
+              defaultValue={employee.bankAccount ?? ""}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bankName">Bank Name</Label>
+            <Input
+              id="bankName"
+              name="bankName"
+              placeholder="e.g. HDFC Bank"
+              defaultValue={employee.bankName ?? ""}
+            />
+          </div>
+        </div>
       </div>
 
       {state.error && (

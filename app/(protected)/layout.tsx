@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import {
   Bell,
   CalendarDays,
@@ -9,6 +9,7 @@ import {
   Home,
   LayoutDashboard,
   Megaphone,
+  MousePointer2,
   Plane,
   Send,
   Settings,
@@ -37,7 +38,7 @@ const EMPLOYEE_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/reports", label: "Attendance History", icon: FileBarChart2 },
   { href: "/leave", label: "My Leave", icon: Plane },
   { href: "/ticket", label: "Raise Ticket", icon: Ticket },
-  { href: "/coming-soon?feature=Salary+Slip", label: "Salary Slip", icon: Wallet },
+  { href: "/salary-slips", label: "Salary Slip", icon: Wallet },
   { href: "/documents", label: "Documents", icon: Folder },
   { href: "/coming-soon?feature=Holidays", label: "Holidays", icon: CalendarDays },
   { href: "/notifications", label: "Notifications", icon: Bell },
@@ -54,14 +55,15 @@ const ADMIN_LINKS: { href: string; label: string; icon: LucideIcon }[] = [
   { href: "/admin/tickets", label: "Support Tickets", icon: Ticket },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/notifications/send", label: "Send Notification", icon: Send },
-  { href: "/coming-soon?feature=Salary+Slip", label: "Salary Slip", icon: Wallet },
+  { href: "/admin/inactivity", label: "Inactivity Reports", icon: MousePointer2 },
+  { href: "/admin/salary-slips", label: "Salary Slips", icon: Wallet },
   { href: "/admin/settings", label: "Company Settings", icon: Settings },
   { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 
 export default async function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const session = await getSessionContext();
-  if (!session) redirect("/login");
+  if (!session) notFound(); // Middleware handles auth — this is a safety fallback
 
   const [unreadCount, profile, timezone] = await Promise.all([
     getUnreadCount(session),

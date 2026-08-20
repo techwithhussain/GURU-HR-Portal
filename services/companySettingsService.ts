@@ -7,6 +7,35 @@ import type { RequestMeta } from "@/services/employeeService";
 import type { SessionContext } from "@/types/session";
 import type { UpdateCompanySettingsInput } from "@/lib/validation/companySettings";
 
+export interface CompanyPublicInfo {
+  name: string;
+  address: string;
+  email: string;
+}
+
+export async function getCompanyPublicInfo(): Promise<CompanyPublicInfo> {
+  const setting = await prisma.companySetting.findFirst();
+  const name = setting?.name || "GURU DIGITAL ADVERTISING";
+  const defaultAddress =
+    "F361, 2nd Floor, Phase 8B, Industrial Area, Sector 74, Sahibzada Ajit Singh Nagar, Mohali, Punjab-140307";
+  const defaultEmail = "cris@gurudigitaladvertising.com";
+
+  let address = defaultAddress;
+  let email = defaultEmail;
+
+  if (setting?.emailSettings && typeof setting.emailSettings === "object") {
+    const es = setting.emailSettings as Record<string, unknown>;
+    if (es.companyEmail && typeof es.companyEmail === "string") {
+      email = es.companyEmail;
+    }
+    if (es.companyAddress && typeof es.companyAddress === "string") {
+      address = es.companyAddress;
+    }
+  }
+
+  return { name, address, email };
+}
+
 export async function getCompanySettings(actor: SessionContext) {
   requirePermission(actor, "settings.manage");
   return prisma.companySetting.findFirst();

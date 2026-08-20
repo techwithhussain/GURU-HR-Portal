@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { Briefcase, Calendar, IdCard, KeyRound, Mail, UserCog } from "lucide-react";
 import { getMyProfileAction } from "@/actions/employee.actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,7 +31,7 @@ export default async function ProfilePage() {
   try {
     profile = await getMyProfileAction();
   } catch {
-    redirect("/dashboard");
+    notFound();
   }
 
   return (
@@ -48,7 +48,7 @@ export default async function ProfilePage() {
             <div>
               <h2 className="text-xl font-bold">{profile.fullName}</h2>
               <p className="text-sm text-white/80">
-                {profile.designation?.name ?? "—"} · {profile.department?.name ?? "—"}
+                {profile.designation?.name ?? "-"} · {profile.department?.name ?? "-"}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 text-xs">

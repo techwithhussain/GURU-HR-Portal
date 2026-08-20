@@ -159,6 +159,29 @@ export function CreateEmployeeForm({
         <Input id="salary" name="salary" type="number" min="0" step="0.01" />
       </div>
 
+      {/* Financial & Statutory Details */}
+      <div className="border-t border-border pt-4 mt-2 space-y-3">
+        <h3 className="text-sm font-bold text-foreground">Financial & Statutory Details (Secure)</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="panNumber">PAN Number</Label>
+            <Input id="panNumber" name="panNumber" placeholder="e.g. ABCDE1234F" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="aadhaarNumber">Aadhaar Number</Label>
+            <Input id="aadhaarNumber" name="aadhaarNumber" placeholder="e.g. 1234 5678 9012" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bankAccount">Bank Account Number</Label>
+            <Input id="bankAccount" name="bankAccount" placeholder="e.g. 123456789012" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="bankName">Bank Name</Label>
+            <Input id="bankName" name="bankName" placeholder="e.g. HDFC Bank" />
+          </div>
+        </div>
+      </div>
+
       {state.error && (
         <p role="alert" className="text-sm text-destructive">
           {state.error}

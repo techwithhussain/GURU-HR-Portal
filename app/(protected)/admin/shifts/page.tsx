@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { listAllShiftsAction, deactivateShiftAction, activateShiftAction } from "@/actions/shift.actions";
+import { listAllShiftChangeRequestsAction } from "@/actions/shiftRequest.actions";
 import { getSessionContext } from "@/services/sessionService";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DeleteShiftButton } from "@/features/shifts/DeleteShiftButton";
+import { AdminShiftRequestsTab } from "@/features/shifts/AdminShiftRequestsTab";
 import {
   Table,
   TableBody,
@@ -13,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { CalendarSync, Layers } from "lucide-react";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -30,32 +33,90 @@ function formatDuration(minutes: number): string {
   return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
-// A shift "crosses midnight" when its end-of-day minute isn't after its start
-// (e.g. 21:00 -> 06:00) — total duration then wraps through 24:00.
 function totalDurationMinutes(startMinutesOfDay: number, endMinutesOfDay: number): number {
   const raw = endMinutesOfDay - startMinutesOfDay;
   return raw > 0 ? raw : raw + 24 * 60;
 }
 
 function formatWeeklyOff(value: unknown): string {
-  if (!Array.isArray(value) || value.length === 0) return "—";
+  if (!Array.isArray(value) || value.length === 0) return "-";
   return value.map((d) => WEEKDAY_LABELS[Number(d)] ?? d).join(", ");
 }
 
-export default async function ShiftsPage() {
+export default async function ShiftsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
-  const shifts = await listAllShiftsAction();
+  const params = await searchParams;
+  const currentTab = params.tab === "requests" ? "requests" : "list";
+
+  const [shifts, requests] = await Promise.all([
+    listAllShiftsAction(),
+    listAllShiftChangeRequestsAction(),
+  ]);
+
+  const pendingRequestsCount = requests.filter((r) => r.status === "PENDING").length;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Shifts</h1>
-        <Button asChild>
-          <Link href="/admin/shifts/new">Add Shift</Link>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Shift Management</h1>
+          <p className="text-xs text-muted-foreground">Manage company shifts and employee shift change requests</p>
+        </div>
+        <div className="flex gap-2">
+          {currentTab === "list" && (
+            <Button asChild>
+              <Link href="/admin/shifts/new">Add Shift</Link>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Tabs Navigation */}
+      <div className="flex items-center gap-2 border-b border-border/60 pb-3">
+        <Button
+          asChild
+          variant={currentTab === "list" ? "default" : "outline"}
+          size="sm"
+          className="rounded-xl text-xs gap-1.5"
+        >
+          <Link href="/admin/shifts">
+            <Layers className="size-3.5" />
+            All Shifts ({shifts.length})
+          </Link>
+        </Button>
+
+        <Button
+          asChild
+          variant={currentTab === "requests" ? "default" : "outline"}
+          size="sm"
+          className={`rounded-xl text-xs gap-1.5 ${
+            currentTab !== "requests" && pendingRequestsCount > 0
+              ? "border-brand-orange/40 text-brand-orange bg-brand-orange/5"
+              : ""
+          }`}
+        >
+          <Link href="/admin/shifts?tab=requests">
+            <CalendarSync className="size-3.5" />
+            Shift Requests
+            {pendingRequestsCount > 0 && (
+              <span className="ml-1 rounded-full bg-brand-orange px-1.5 py-0.2 text-[10px] font-bold text-white">
+                {pendingRequestsCount}
+              </span>
+            )}
+          </Link>
         </Button>
       </div>
+
+      {currentTab === "requests" ? (
+        <AdminShiftRequestsTab initialRequests={requests} />
+      ) : (
+
 
       <Table>
         <TableHeader>
@@ -80,10 +141,10 @@ export default async function ShiftsPage() {
               <TableRow key={shift.id}>
                 <TableCell>{shift.name}</TableCell>
                 <TableCell>
-                  {formatTime(shift.startMinutesOfDay)}–{formatTime(shift.endMinutesOfDay)}
+                  {formatTime(shift.startMinutesOfDay)} - {formatTime(shift.endMinutesOfDay)}
                 </TableCell>
                 <TableCell>{formatDuration(totalMin)}</TableCell>
-                <TableCell>{shift.breakAllowanceMin != null ? formatDuration(breakMin) : "—"}</TableCell>
+                <TableCell>{shift.breakAllowanceMin != null ? formatDuration(breakMin) : "-"}</TableCell>
                 <TableCell>{formatDuration(netMin)}</TableCell>
                 <TableCell>{formatWeeklyOff(shift.weeklyOff)}</TableCell>
                 <TableCell>
@@ -139,6 +200,8 @@ export default async function ShiftsPage() {
           )}
         </TableBody>
       </Table>
+      )}
     </div>
   );
 }
+

@@ -1,0 +1,23 @@
+-- AlterTable: Add itemized breakdown, attendance details, and historical employee snapshot columns to salary_slips
+ALTER TABLE "salary_slips"
+  ADD COLUMN IF NOT EXISTS "specialAllowance" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "nightAllowance" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "otherAllowance" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "pfDeduction" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "profTaxDeduction" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "tdsDeduction" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "lopDeduction" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "otherDeduction" DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "paidLeaveDays" INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "lopDays" INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "snapEmployeeName" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapEmployeeCode" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapDepartment" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapDesignation" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapJoiningDate" DATE,
+  ADD COLUMN IF NOT EXISTS "snapEmploymentType" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapLocation" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapPanNumber" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapAadhaarNumber" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapBankAccount" TEXT,
+  ADD COLUMN IF NOT EXISTS "snapBankName" TEXT;

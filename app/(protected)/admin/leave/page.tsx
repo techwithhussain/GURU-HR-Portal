@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import {
   listAllLeavesAction,
   listAllBalancesAction,
@@ -54,7 +54,7 @@ export default async function AdminLeavePage({
   searchParams: Promise<Record<string, string | undefined>>;
 }) {
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   const params = await searchParams;
   const tab = (["requests", "balances", "types", "calendar"] as const).includes(params.tab as never)
@@ -194,7 +194,7 @@ export default async function AdminLeavePage({
                     </Link>
                     <p className="text-xs text-muted-foreground">{leave.employee.user.employeeCode}</p>
                   </TableCell>
-                  <TableCell>{leave.employee.department?.name ?? "—"}</TableCell>
+                  <TableCell>{leave.employee.department?.name ?? "-"}</TableCell>
                   <TableCell>
                     <span className="inline-flex items-center gap-1.5">
                       <span className="size-2 rounded-full" style={{ backgroundColor: leave.type.color }} />
@@ -202,7 +202,7 @@ export default async function AdminLeavePage({
                     </span>
                   </TableCell>
                   <TableCell>
-                    {formatDate(leave.startDate)} – {formatDate(leave.endDate)}
+                    {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
                   </TableCell>
                   <TableCell>{String(leave.days)}</TableCell>
                   <TableCell>{formatDate(leave.createdAt)}</TableCell>

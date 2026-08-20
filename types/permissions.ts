@@ -8,6 +8,7 @@ export const PERMISSION_KEYS = [
   "reports.view.all",
   "reports.view.self",
   "salary.view",
+  "salary.manage",
   "settings.manage",
 ] as const;
 
@@ -19,5 +20,6 @@ export type RoleName = (typeof ROLE_NAMES)[number];
 
 export const ROLE_PERMISSIONS: Record<RoleName, PermissionKey[]> = {
   ADMIN: [...PERMISSION_KEYS],
-  EMPLOYEE: ["leave.apply", "attendance.self", "reports.view.self"],
+  EMPLOYEE: ["leave.apply", "attendance.self", "reports.view.self", "salary.view"],
 };
+

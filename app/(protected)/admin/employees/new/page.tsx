@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { notFound } from "next/navigation";
 import { listDepartments, listDesignations, listRoles } from "@/services/orgService";
 import { listShifts } from "@/services/shiftService";
 import { getSessionContext } from "@/services/sessionService";
@@ -6,7 +6,7 @@ import { CreateEmployeeForm } from "@/features/employees/CreateEmployeeForm";
 
 export default async function NewEmployeePage() {
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   const [departments, designations, shifts, roles] = await Promise.all([
     listDepartments(),

@@ -23,3 +23,18 @@ export const updateShiftSchema = createShiftSchema.partial().extend({
 });
 
 export type UpdateShiftInput = z.infer<typeof updateShiftSchema>;
+
+export const createShiftChangeRequestSchema = z.object({
+  requestedShiftId: z.string().min(1, "Please select a shift"),
+  reason: z.string().trim().min(3, "Reason / Note is required for shift change request"),
+});
+
+export type CreateShiftChangeRequestInput = z.infer<typeof createShiftChangeRequestSchema>;
+
+export const reviewShiftChangeRequestSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED"]),
+  adminNote: z.string().trim().optional(),
+});
+
+export type ReviewShiftChangeRequestInput = z.infer<typeof reviewShiftChangeRequestSchema>;
+

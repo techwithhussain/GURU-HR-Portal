@@ -13,12 +13,13 @@ import type { SendAdminAnnouncementInput } from "@/lib/validation/notification";
 export interface NotificationEmail {
   subject: string;
   text: string;
+  html?: string;
 }
 
 async function sendEmailToUser(userId: string, email: NotificationEmail): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
   if (!user) return;
-  await sendMail({ to: user.email, subject: email.subject, text: email.text });
+  await sendMail({ to: user.email, subject: email.subject, text: email.text, html: email.html });
 }
 
 export async function notifyUser(

@@ -19,7 +19,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      "connect-src 'self' http://localhost:47800",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -30,6 +30,17 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  // @react-pdf/renderer uses Node.js-only APIs (canvas, zlib, etc.) — keep it
+  // server-side only so the client bundle never tries to import it.
+  serverExternalPackages: ["@react-pdf/renderer"],
+  // HTTP-level redirects — handled before Next.js page rendering, so they
+  // never call redirect() from next/navigation which triggers an internal
+  // server-to-server fetch that fails on Hostinger.
+  async redirects() {
+    return [
+      { source: "/", destination: "/dashboard", permanent: false },
+    ];
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

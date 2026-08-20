@@ -162,3 +162,90 @@ export async function deleteShift(
     before: existing as Prisma.InputJsonValue,
   });
 }
+
+export async function listActiveEmployeesWithShifts() {
+  return prisma.employee.findMany({
+    where: {
+      deletedAt: null,
+      status: "ACTIVE",
+    },
+    select: {
+      id: true,
+      fullName: true,
+      user: {
+        select: {
+          employeeCode: true,
+          email: true,
+        },
+      },
+      department: {
+        select: {
+          name: true,
+        },
+      },
+      designation: {
+        select: {
+          name: true,
+        },
+      },
+      shift: {
+        select: {
+          id: true,
+          name: true,
+          startMinutesOfDay: true,
+          endMinutesOfDay: true,
+        },
+      },
+    },
+    orderBy: { fullName: "asc" },
+  });
+}
+
+export async function assignEmployeeShift(
+  employeeId: string,
+  shiftId: string,
+  actor: SessionContext,
+  meta: RequestMeta = {},
+) {
+  requirePermission(actor, "employee.manage");
+
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: { id: true, fullName: true, shiftId: true, deletedAt: true },
+  });
+  if (!employee || employee.deletedAt) throw new NotFoundError("Employee not found");
+
+  const shift = await prisma.shift.findUnique({
+    where: { id: shiftId },
+    select: { id: true, name: true },
+  });
+  if (!shift) throw new NotFoundError("Shift not found");
+
+  const updated = await prisma.employee.update({
+    where: { id: employeeId },
+    data: { shiftId },
+    select: { id: true, fullName: true, shiftId: true },
+  });
+
+  await recordAudit({
+    actorUserId: actor.userId,
+    action: "employee.shift_assigned",
+    targetEntity: "employee",
+    targetId: employeeId,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    metadata: {
+      previousShiftId: employee.shiftId,
+      newShiftId: shiftId,
+      shiftName: shift.name,
+    },
+  });
+
+  return {
+    employeeId: updated.id,
+    employeeName: updated.fullName,
+    shiftId: shift.id,
+    shiftName: shift.name,
+  };
+}
+

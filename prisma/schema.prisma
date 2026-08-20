@@ -75,16 +75,20 @@ model User {
   createdAt               DateTime   @default(now())
   updatedAt               DateTime   @updatedAt
 
-  role           Role            @relation(fields: [roleId], references: [id])
-  employee       Employee?
-  sessions       Session[]
-  auditLogs      AuditLog[]      @relation("AuditActor")
-  correctedRows  Attendance[]    @relation("AttendanceCorrectedBy")
-  notifications  Notification[]
-  approvedLeaves  Leave[]        @relation("LeaveApprover")
-  cancelledLeaves Leave[]        @relation("LeaveCancelledBy")
+  role              Role              @relation(fields: [roleId], references: [id])
+  employee          Employee?
+  sessions          Session[]
+  auditLogs         AuditLog[]        @relation("AuditActor")
+  correctedRows     Attendance[]      @relation("AttendanceCorrectedBy")
+  notifications     Notification[]
+  approvedLeaves    Leave[]           @relation("LeaveApprover")
+  cancelledLeaves   Leave[]           @relation("LeaveCancelledBy")
   uploadedDocuments EmployeeDocument[]
-  announcements  Announcement[]
+  announcements     Announcement[]
+  inactivityReviews InactivityEvent[] @relation("InactivityReviewedBy")
+  salarySlipsCreated SalarySlip[]     @relation("SalarySlipCreatedBy")
+  shiftRequestsReviewed ShiftChangeRequest[] @relation("ShiftRequestReviewedBy")
+  attendanceCorrectionsReviewed AttendanceCorrectionRequest[] @relation("AttendanceCorrectionReviewedBy")
 
   @@map("users")
 }
@@ -160,9 +164,14 @@ model Employee {
   allowances       Decimal?       @db.Decimal(12, 2)
   deductions       Decimal?       @db.Decimal(12, 2)
   emergencyContact String?
+  panNumber        String?
+  aadhaarNumber    String?
+  bankAccount      String?
+  bankName         String?
   documents        Json?
   status           EmployeeStatus @default(ACTIVE)
   profileImageUrl  String?
+  windowsUsername  String?        @unique  // e.g. "suhail" — agent detects this automatically
   resignedAt       DateTime?
   deletedAt        DateTime?
   createdAt        DateTime       @default(now())
@@ -179,7 +188,13 @@ model Employee {
   leaves         Leave[]
   leaveBalances  LeaveBalance[]
   documentFiles  EmployeeDocument[]
-  tickets        Ticket[]
+  tickets           Ticket[]
+  overtimeSessions  OvertimeSession[]
+  inactivityEvents  InactivityEvent[]
+  agentPcSession    AgentPcSession?   // Which PC this employee is currently logged into
+  salarySlips       SalarySlip[]
+  shiftChangeRequests ShiftChangeRequest[]
+  attendanceCorrections AttendanceCorrectionRequest[]
 
   @@index([departmentId])
   @@index([status])
@@ -229,8 +244,10 @@ model Shift {
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
-  employees  Employee[]
-  attendance Attendance[]
+  employees              Employee[]
+  attendance             Attendance[]
+  currentShiftRequests   ShiftChangeRequest[] @relation("CurrentShiftRequests")
+  requestedShiftRequests ShiftChangeRequest[] @relation("RequestedShiftRequests")
 
   @@map("shifts")
 }
@@ -271,15 +288,42 @@ model Attendance {
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
 
-  employee     Employee @relation(fields: [employeeId], references: [id])
-  shift        Shift    @relation(fields: [shiftId], references: [id])
-  correctedBy  User?    @relation("AttendanceCorrectedBy", fields: [correctedByUserId], references: [id])
-  breaks       Break[]
+  employee         Employee @relation(fields: [employeeId], references: [id])
+  shift            Shift    @relation(fields: [shiftId], references: [id])
+  correctedBy      User?    @relation("AttendanceCorrectedBy", fields: [correctedByUserId], references: [id])
+  breaks           Break[]
+  overtimeSessions OvertimeSession[]
+  inactivityEvents InactivityEvent[]
 
   @@unique([employeeId, attendanceDate])
   @@index([attendanceDate])
   @@index([employeeId])
   @@map("attendance")
+}
+
+enum OvertimeStatus {
+  ACTIVE
+  COMPLETED
+}
+
+model OvertimeSession {
+  id           String         @id @default(cuid())
+  employeeId   String
+  attendanceId String
+  startAt      DateTime
+  endAt        DateTime?
+  durationMin  Int?
+  status       OvertimeStatus @default(ACTIVE)
+  notes        String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+  attendance Attendance @relation(fields: [attendanceId], references: [id])
+
+  @@index([employeeId])
+  @@index([attendanceId])
+  @@map("overtime_sessions")
 }
 
 enum BreakType {
@@ -436,19 +480,22 @@ model AuditLog {
 // ---------------------------------------------------------------------------
 
 model CompanySetting {
-  id                  String   @id @default(cuid())
-  name                String   @default("Guru Digital Advertising")
-  timezone            String   @default("Asia/Kolkata")
-  officeIps           Json     @default("[]")
-  officeHours         Json?
-  holidayCalendar     Json?
-  emailSettings       Json?
-  maxConcurrentBreaks Int      @default(3)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                          String   @id @default(cuid())
+  name                        String   @default("Guru Digital Advertising")
+  timezone                    String   @default("Asia/Kolkata")
+  officeIps                   Json     @default("[]")
+  officeHours                 Json?
+  holidayCalendar             Json?
+  emailSettings               Json?
+  maxConcurrentBreaks         Int      @default(3)
+  inactivityThresholdMinutes  Int      @default(20)
+  pcAssignments               Json     @default("{}")  // { "PC-HOSTNAME": "employeeId" }
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 
   @@map("company_settings")
 }
+
 
 // ---------------------------------------------------------------------------
 // Announcements
@@ -507,3 +554,170 @@ model Ticket {
   @@index([createdAt])
   @@map("tickets")
 }
+
+// ---------------------------------------------------------------------------
+// Activity Tracking — Desktop Agent inactivity events
+// ---------------------------------------------------------------------------
+
+enum InactivityStatus {
+  PENDING   // Admin has not reviewed yet
+  IGNORED   // Admin reviewed and ignored
+  NOTED     // Admin reviewed and noted
+}
+
+model InactivityEvent {
+  id           String          @id @default(cuid())
+  employeeId   String
+  attendanceId String?
+  pcName       String?
+  inactiveFrom DateTime
+  inactiveTo   DateTime?
+  durationMin  Int?
+  status       InactivityStatus @default(PENDING)
+  adminNote    String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  employee     Employee    @relation(fields: [employeeId], references: [id])
+  attendance   Attendance? @relation(fields: [attendanceId], references: [id])
+  reviewedBy   User?       @relation("InactivityReviewedBy", fields: [reviewedById], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("inactivity_events")
+}
+
+// ---------------------------------------------------------------------------
+// Agent PC Session — tracks which employee is currently logged into which PC
+// One row per PC. Created on HR Portal login, deleted on logout.
+// This is the single source of truth for employee-PC mapping.
+// ---------------------------------------------------------------------------
+
+model AgentPcSession {
+  id               String    @id @default(cuid())
+  pcName           String    @unique              // Windows hostname — one active session per PC
+  employeeId       String    @unique              // One employee per PC at a time
+  loggedInAt       DateTime  @default(now())      // When employee logged into HR Portal
+  lastHeartbeatAt  DateTime?                      // Last time desktop agent checked in
+  agentVersion     String?                        // Agent version for rollout tracking
+  updatedAt        DateTime  @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@index([pcName])
+  @@index([employeeId])
+  @@map("agent_pc_sessions")
+}
+
+// ---------------------------------------------------------------------------
+// Salary Slips — admin creates, employee views
+// ---------------------------------------------------------------------------
+
+model SalarySlip {
+  id               String    @id @default(cuid())
+  employeeId       String
+  month            Int       // 1-12
+  year             Int
+  basicSalary      Decimal   @db.Decimal(12, 2)
+  specialAllowance Decimal   @db.Decimal(12, 2) @default(0)
+  nightAllowance   Decimal   @db.Decimal(12, 2) @default(0)
+  otherAllowance   Decimal   @db.Decimal(12, 2) @default(0)
+  allowances       Decimal   @db.Decimal(12, 2) @default(0)
+  bonus            Decimal   @db.Decimal(12, 2) @default(0)
+  pfDeduction      Decimal   @db.Decimal(12, 2) @default(0)
+  profTaxDeduction Decimal   @db.Decimal(12, 2) @default(0)
+  tdsDeduction     Decimal   @db.Decimal(12, 2) @default(0)
+  lopDeduction     Decimal   @db.Decimal(12, 2) @default(0)
+  otherDeduction   Decimal   @db.Decimal(12, 2) @default(0)
+  deductions       Decimal   @db.Decimal(12, 2) @default(0)
+  netSalary        Decimal   @db.Decimal(12, 2)
+  workingDays      Int?
+  presentDays      Int?
+  paidLeaveDays    Int?      @default(0)
+  lopDays          Int?      @default(0)
+  absentDays       Int?
+  notes            String?   @db.Text
+  snapEmployeeName String?
+  snapEmployeeCode String?
+  snapDepartment   String?
+  snapDesignation  String?
+  snapJoiningDate  DateTime? @db.Date
+  snapEmploymentType String?
+  snapLocation     String?
+  snapPanNumber    String?
+  snapAadhaarNumber String?
+  snapBankAccount  String?
+  snapBankName     String?
+  createdByUserId  String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  employee  Employee @relation(fields: [employeeId], references: [id])
+  createdBy User     @relation("SalarySlipCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@index([employeeId])
+  @@index([year, month])
+  @@map("salary_slips")
+}
+
+// ---------------------------------------------------------------------------
+// Employee Requests — Shift Change & Attendance Correction
+// ---------------------------------------------------------------------------
+
+enum RequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ShiftChangeRequest {
+  id               String        @id @default(cuid())
+  employeeId       String
+  currentShiftId   String
+  requestedShiftId String
+  reason           String        @db.Text
+  status           RequestStatus @default(PENDING)
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  adminNote        String?       @db.Text
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  employee         Employee      @relation(fields: [employeeId], references: [id])
+  currentShift     Shift         @relation("CurrentShiftRequests", fields: [currentShiftId], references: [id])
+  requestedShift   Shift         @relation("RequestedShiftRequests", fields: [requestedShiftId], references: [id])
+  reviewedBy       User?         @relation("ShiftRequestReviewedBy", fields: [reviewedByUserId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("shift_change_requests")
+}
+
+model AttendanceCorrectionRequest {
+  id                String        @id @default(cuid())
+  employeeId        String
+  attendanceDate    DateTime      @db.Date
+  requestedCheckIn  DateTime?
+  requestedCheckOut DateTime?
+  reason            String        @db.Text
+  status            RequestStatus @default(PENDING)
+  reviewedByUserId  String?
+  reviewedAt        DateTime?
+  adminNote         String?       @db.Text
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  employee          Employee      @relation(fields: [employeeId], references: [id])
+  reviewedBy        User?         @relation("AttendanceCorrectionReviewedBy", fields: [reviewedByUserId], references: [id])
+
+  @@index([employeeId])
+  @@index([status])
+  @@index([attendanceDate])
+  @@map("attendance_correction_requests")
+}
+

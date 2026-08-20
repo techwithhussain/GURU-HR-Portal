@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { getEmployeeAction } from "@/actions/employee.actions";
 import { listDepartments, listDesignations, listRoles } from "@/services/orgService";
 import { listShifts } from "@/services/shiftService";
@@ -12,7 +12,7 @@ export default async function EditEmployeePage({
   params: Promise<{ id: string }>;
 }) {
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   const { id } = await params;
 

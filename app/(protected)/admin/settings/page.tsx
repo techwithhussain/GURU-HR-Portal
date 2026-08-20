@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+﻿import { notFound } from "next/navigation";
 import { getSessionContext } from "@/services/sessionService";
 import { hasPermission } from "@/lib/rbac/permissions";
 import { getCompanySettingsAction } from "@/actions/companySettings.actions";
@@ -9,7 +9,7 @@ import { env } from "@/lib/env";
 
 export default async function CompanySettingsPage() {
   const session = await getSessionContext();
-  if (!session || !hasPermission(session, "settings.manage")) redirect("/dashboard");
+  if (!session || !hasPermission(session, "settings.manage")) notFound();
 
   const settings = await getCompanySettingsAction();
   const tvUrl = `${env.APP_URL}/tv/breaks?token=${env.TV_DISPLAY_TOKEN}`;

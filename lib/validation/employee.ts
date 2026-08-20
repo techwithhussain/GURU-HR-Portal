@@ -18,6 +18,10 @@ export const createEmployeeSchema = z.object({
   allowances: z.coerce.number().nonnegative().optional(),
   deductions: z.coerce.number().nonnegative().optional(),
   emergencyContact: z.string().optional(),
+  panNumber: z.string().optional(),
+  aadhaarNumber: z.string().optional(),
+  bankAccount: z.string().optional(),
+  bankName: z.string().optional(),
   photoPath: z.string().optional(),
   photoFileName: z.string().optional(),
 });
@@ -40,6 +44,10 @@ export const updateEmployeeSchema = z.object({
   allowances: z.coerce.number().nonnegative().optional(),
   deductions: z.coerce.number().nonnegative().optional(),
   emergencyContact: z.string().optional(),
+  panNumber: z.string().optional(),
+  aadhaarNumber: z.string().optional(),
+  bankAccount: z.string().optional(),
+  bankName: z.string().optional(),
   photoPath: z.string().optional(),
   photoFileName: z.string().optional(),
 });

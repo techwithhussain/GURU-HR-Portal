@@ -39,10 +39,14 @@ export async function loginAction(
     return { error: "Too many login attempts from this network. Please try again in a few minutes." };
   }
 
+  // pcName comes from the hidden form field — populated by agent's local server (port 47800)
+  const pcName = (formData.get("pcName") as string | null) || null;
+
   const result = await authService.login({
     ...parsed.data,
     ip,
     userAgent: hdrs.get("user-agent"),
+    pcName,
   });
 
   if (!result.ok) {
@@ -54,6 +58,7 @@ export async function loginAction(
 
   redirect("/dashboard");
 }
+
 
 export async function logoutAction(): Promise<void> {
   await authService.logout();

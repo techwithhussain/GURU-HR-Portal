@@ -179,3 +179,32 @@ export async function toggleWeeklyOffAction(employeeId: string, dateStr: string)
   }
 }
 
+export async function getOvertimeStatusAction() {
+  const session = await requireSession();
+  const employeeId = requireEmployeeId(session);
+  return attendanceService.getOvertimeStatus(employeeId);
+}
+
+export async function startOvertimeAction(): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const employeeId = requireEmployeeId(session);
+    await attendanceService.startOvertimeSession(employeeId, session);
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toUserMessage(err, "Failed to start overtime") };
+  }
+}
+
+export async function endOvertimeAction(): Promise<ActionResult> {
+  try {
+    const session = await requireSession();
+    const employeeId = requireEmployeeId(session);
+    await attendanceService.endOvertimeSession(employeeId, session);
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: toUserMessage(err, "Failed to end overtime") };
+  }
+}

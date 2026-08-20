@@ -17,6 +17,7 @@ import { sendMail } from "@/lib/mailer";
 import { notifyUser, notifyUsers } from "@/services/notificationService";
 import { NotFoundError, type RequestMeta } from "@/services/employeeService";
 import type { SessionContext } from "@/types/session";
+import { bindPcSession, unbindPcSession } from "@/services/inactivityService";
 
 // A locked-forever sentinel for admin-initiated locks — far enough in the
 // future to never expire on its own (self-service lockouts use a short,
@@ -28,6 +29,7 @@ export interface LoginInput {
   password: string;
   ip: string | null;
   userAgent: string | null;
+  pcName?: string | null; // From desktop agent local server (port 47800)
 }
 
 export type LoginResult =
@@ -87,7 +89,21 @@ export async function login(input: LoginInput): Promise<LoginResult> {
     data: { failedLoginAttempts: 0, lastFailedLoginAt: null, lockedUntil: null, lastLoginAt: now },
   });
 
+  // Get employee ID for PC session binding
+  const employee = await prisma.employee.findUnique({
+    where: { userId: user.id },
+    select: { id: true },
+  });
+
   await createSession({ userId: user.id, ip: input.ip, userAgent: input.userAgent });
+
+  // Bind PC session — this is how the agent knows which employee is on which PC
+  if (input.pcName && employee?.id) {
+    bindPcSession(input.pcName, employee.id).catch((err) =>
+      console.error("[auth.login] bindPcSession failed:", err),
+    );
+  }
+
   await recordAudit({
     actorUserId: user.id,
     action: "auth.login.success",
@@ -171,6 +187,12 @@ export async function logout(): Promise<void> {
   const session = await getSessionContext();
   await revokeCurrentSession();
   if (session) {
+    // Unbind PC session — agent stops tracking this employee immediately
+    if (session.employeeId) {
+      unbindPcSession({ employeeId: session.employeeId }).catch((err) =>
+        console.error("[auth.logout] unbindPcSession failed:", err),
+      );
+    }
     await recordAudit({
       actorUserId: session.userId,
       action: "auth.logout",

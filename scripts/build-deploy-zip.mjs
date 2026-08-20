@@ -15,13 +15,16 @@ const OUTPUT = path.join(ROOT, "hr-portal-deploy.zip");
 // owned by whatever user runs it there, with nothing pre-existing to conflict
 // with.
 const TOP_LEVEL_ITEMS = [
+  ".env",
+  ".env.example",
   ".env.production.local",
-  // ".next" is deliberately NOT shipped — see note above
+  ".gitignore",
   ".prettierrc.json",
   "actions",
   "app",
   "components",
   "components.json",
+  "docker-compose.yml",
   "eslint.config.mjs",
   "features",
   "hooks",
@@ -41,6 +44,7 @@ const TOP_LEVEL_ITEMS = [
   "tests",
   "tsconfig.json",
   "types",
+  "vitest.config.ts",
 ];
 
 // Paths (relative to ROOT, forward slashes) to leave out of the deploy zip —
@@ -106,4 +110,8 @@ for (const item of TOP_LEVEL_ITEMS) {
   }
 }
 
-await archive.finalize();
+await new Promise((resolve, reject) => {
+  output.on("close", resolve);
+  archive.on("error", reject);
+  archive.finalize();
+});

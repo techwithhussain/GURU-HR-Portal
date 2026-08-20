@@ -103,3 +103,21 @@ export async function getShiftAction(shiftId: string) {
   requirePermission(session, "employee.manage");
   return shiftService.getShiftById(shiftId);
 }
+
+export async function quickAssignShiftAction(
+  employeeId: string,
+  shiftId: string,
+): Promise<ActionResult<{ employeeName: string; shiftName: string }>> {
+  try {
+    const session = await requireSession();
+    const meta = await requestMeta();
+    const result = await shiftService.assignEmployeeShift(employeeId, shiftId, session, meta);
+    revalidatePath("/admin/dashboard");
+    revalidatePath("/admin/employees");
+    revalidatePath("/admin/shifts");
+    return { success: true, data: result };
+  } catch (err) {
+    return { success: false, error: toUserMessage(err, "Failed to assign shift") };
+  }
+}
+

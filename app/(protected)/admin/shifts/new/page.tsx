@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation";
+﻿import { notFound } from "next/navigation";
 import { getSessionContext } from "@/services/sessionService";
 import { ShiftForm } from "@/features/shifts/ShiftForm";
 
 export default async function NewShiftPage() {
   const session = await getSessionContext();
-  if (!session || session.roleName !== "ADMIN") redirect("/dashboard");
+  if (!session || session.roleName !== "ADMIN") notFound();
 
   return (
     <div className="space-y-6">

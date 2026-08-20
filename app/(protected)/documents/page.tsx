@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { FileText } from "lucide-react";
 import { getSessionContext } from "@/services/sessionService";
 import { listMyDocumentsAction } from "@/actions/employeeDocument.actions";
@@ -22,9 +22,9 @@ function formatDate(date: Date | string): string {
 
 export default async function DocumentsPage() {
   const session = await getSessionContext();
-  if (!session) redirect("/login");
+  if (!session) notFound();
   const employeeId = session.employeeId;
-  if (!employeeId) redirect("/dashboard");
+  if (!employeeId) notFound();
 
   const documents = await listMyDocumentsAction();
 

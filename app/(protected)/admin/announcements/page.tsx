@@ -1,6 +1,8 @@
 import { getAllAnnouncements } from "@/services/announcementService";
 import { AdminAnnouncementsPanel } from "@/features/announcements/AdminAnnouncementsPanel";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminAnnouncementsPage() {
   const announcements = await getAllAnnouncements();
   return (

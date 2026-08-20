@@ -38,5 +38,12 @@ export async function proxy(request: NextRequest) {
   requestHeaders.set("x-user-id", session.userId);
   requestHeaders.set("x-user-role", session.roleName);
 
+  // Redirect admins from /dashboard to /admin/dashboard at middleware level.
+  // This avoids calling redirect() inside the Server Component which triggers
+  // an internal server-to-server fetch that fails on Hostinger.
+  if (pathname === "/dashboard" && session.roleName === "ADMIN") {
+    return NextResponse.redirect(new URL("/admin/dashboard", request.url));
+  }
+
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
