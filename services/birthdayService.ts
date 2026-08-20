@@ -149,24 +149,26 @@ export async function dispatchBirthdayNotifications(
   const upcoming = await getUpcomingBirthdays(timezone, actor.employeeId);
   if (upcoming.length === 0) return;
 
-  // Check which birthday people the user has already been notified about today
-  const existingToday = await prisma.notification.findMany({
+  // Check which birthday people the user has already been notified about in the last 24 hours or for today
+  const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const existingNotifications = await prisma.notification.findMany({
     where: {
       userId: actor.userId,
       type: "BIRTHDAY_REMINDER",
-      createdAt: { gte: new Date(dateStr) },
+      createdAt: { gte: last24h },
     },
     select: { payload: true },
   });
 
-  const alreadyNotified = new Set(
-    existingToday
-      .map((n) => {
-        const p = n.payload as Record<string, unknown>;
-        return typeof p.employeeId === "string" ? p.employeeId : null;
-      })
-      .filter(Boolean) as string[],
-  );
+  const alreadyNotified = new Set<string>();
+  for (const n of existingNotifications) {
+    if (n.payload && typeof n.payload === "object") {
+      const p = n.payload as Record<string, unknown>;
+      if (typeof p.employeeId === "string" && (p.date === dateStr || !p.date)) {
+        alreadyNotified.add(p.employeeId);
+      }
+    }
+  }
 
   for (const person of upcoming) {
     if (alreadyNotified.has(person.id)) continue;
@@ -177,5 +179,6 @@ export async function dispatchBirthdayNotifications(
       daysUntil: person.daysUntil,
       date: dateStr,
     });
+    alreadyNotified.add(person.id);
   }
 }
